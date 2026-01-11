@@ -158,11 +158,12 @@ body {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 100%;
+  width: 50%;
   display: flex;
   align-items: center;
   font-weight: bold;
   font-size: 0.9rem;
+  z-index: 1;
 }
 
 .card-action-left {
@@ -219,6 +220,7 @@ body {
   padding: 20px;
   transition: background 0.2s;
   touch-action: pan-y pinch-zoom;
+  z-index: 2;
 }
 
 .ride-card.swiping {
@@ -488,7 +490,7 @@ function startQueue(ride, parkName) {
     startTime: new Date().toISOString()
   };
   localStorage.setItem(QUEUE_KEY, JSON.stringify(queues));
-  showToast(`Started queue: ${ride.name}`);
+  showToast(`Timer started: ${ride.name}`);
 }
 
 function endQueue(rideId) {
@@ -716,15 +718,15 @@ function setupSwipeHandlers() {
           actionLeft.textContent = 'Log ride';
         }
         actionRight.classList.remove('ready');
-        actionRight.textContent = inQueue ? 'Cancel queue' : 'Join queue';
+        actionRight.textContent = inQueue ? 'Cancel timer' : 'Start timer';
       } else if (diff > 0) {
         // Swiping right - join/cancel queue
         if (percent > 0.25) {
           actionRight.classList.add('ready');
-          actionRight.textContent = inQueue ? 'Release to cancel' : 'Release to join';
+          actionRight.textContent = inQueue ? 'Release to cancel' : 'Release to start';
         } else {
           actionRight.classList.remove('ready');
-          actionRight.textContent = inQueue ? 'Cancel queue' : 'Join queue';
+          actionRight.textContent = inQueue ? 'Cancel timer' : 'Start timer';
         }
         actionLeft.classList.remove('ready');
         actionLeft.textContent = 'Log ride';
@@ -751,7 +753,7 @@ function setupSwipeHandlers() {
             // Swipe right - toggle queue
             if (inQueue) {
               endQueue(rideId);
-              showToast(`Left queue: ${ride.name}`);
+              showToast(`Timer cancelled: ${ride.name}`);
             } else {
               startQueue(ride, getCurrentParkName());
             }
@@ -765,7 +767,7 @@ function setupSwipeHandlers() {
       actionLeft.classList.remove('ready');
       actionLeft.textContent = 'Log ride';
       actionRight.classList.remove('ready');
-      actionRight.textContent = inQueue ? 'Cancel queue' : 'Join queue';
+      actionRight.textContent = inQueue ? 'Cancel timer' : 'Start timer';
       currentX = 0;
       startX = 0;
 
@@ -979,13 +981,6 @@ function renderApp() {
   content.innerHTML = `
     <div class="filters">
       <input type="text" id="search" placeholder="Search ${typeLabel.toLowerCase()}..." />
-      <select id="statusFilter">
-        <option value="">All Status</option>
-        <option value="OPERATING">Operating</option>
-        <option value="CLOSED">Closed</option>
-        <option value="DOWN">Down</option>
-        <option value="REFURBISHMENT">Refurbishment</option>
-      </select>
       <select id="sortOrder">
         <option value="alpha">A-Z</option>
         <option value="wait-low">Wait: Low to High</option>
@@ -999,19 +994,15 @@ function renderApp() {
   `;
 
   const searchInput = document.getElementById('search');
-  const statusFilter = document.getElementById('statusFilter');
   const sortOrder = document.getElementById('sortOrder');
   const ridesGrid = document.getElementById('ridesGrid');
 
   function renderItems() {
     const searchTerm = searchInput.value.toLowerCase();
-    const statusValue = statusFilter.value;
     const sortValue = sortOrder.value;
 
     const results = itemsWithLive.filter(item => {
-      const matchesSearch = item.name.toLowerCase().includes(searchTerm);
-      const matchesStatus = !statusValue || item.status === statusValue;
-      return matchesSearch && matchesStatus;
+      return item.name.toLowerCase().includes(searchTerm);
     });
 
     results.sort((a, b) => {
@@ -1053,7 +1044,7 @@ function renderApp() {
       const queueStart = getQueueStartTime(item.id);
       return `
         <div class="card-wrapper" data-ride-id="${item.id}" data-ride-name="${item.name}">
-          <div class="card-action card-action-right">Join queue</div>
+          <div class="card-action card-action-right">Start timer</div>
           <div class="card-action card-action-left">Log ride</div>
           <div class="ride-card ${inQueue ? 'in-queue' : ''}">
             <div class="ride-name">${item.name}</div>
@@ -1079,7 +1070,6 @@ function renderApp() {
   }
 
   searchInput.addEventListener('input', renderItems);
-  statusFilter.addEventListener('change', renderItems);
   sortOrder.addEventListener('change', renderItems);
   renderItems();
 }
