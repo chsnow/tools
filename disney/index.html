@@ -2,8 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Disneyland Resort Rides</title>
+
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DL Rides">
+
+  <!-- Manifest and Icons -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
+
   <style>
 * {
   box-sizing: border-box;
@@ -13,6 +25,10 @@ body {
   font-family: Helvetica, Arial, sans-serif;
   margin: 0;
   padding: 20px;
+  padding-top: calc(20px + env(safe-area-inset-top));
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  padding-left: calc(20px + env(safe-area-inset-left));
+  padding-right: calc(20px + env(safe-area-inset-right));
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   min-height: 100vh;
   color: #fff;
