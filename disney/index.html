@@ -39,21 +39,61 @@ body {
   margin: 0 auto;
 }
 
+.sticky-header {
+  position: sticky;
+  top: 0;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  padding-top: calc(12px + env(safe-area-inset-top));
+  margin: calc(-20px - env(safe-area-inset-top)) -20px 0 -20px;
+  padding-left: 20px;
+  padding-right: 20px;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  z-index: 100;
+}
+
 .park-toggle {
   display: flex;
   justify-content: center;
+  align-items: center;
   gap: 10px;
-  margin-bottom: 30px;
+  margin-bottom: 12px;
+  position: relative;
+}
+
+.favorites-filter {
+  position: absolute;
+  right: 0;
+  background: none;
+  border: 1.5px solid rgba(255,255,255,0.4);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.6);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+  transition: all 0.2s;
+}
+
+.favorites-filter:hover {
+  border-color: rgba(255,255,255,0.7);
+  color: rgba(255,255,255,0.9);
+}
+
+.favorites-filter.active {
+  background: #fff;
+  border-color: #fff;
+  color: #1a1a2e;
 }
 
 .park-btn {
-  padding: 12px 24px;
+  padding: 8px 16px;
   border: 2px solid rgba(255,255,255,0.3);
-  border-radius: 30px;
+  border-radius: 20px;
   background: transparent;
   color: #fff;
   font-family: Helvetica, Arial, sans-serif;
-  font-size: 16px;
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -73,7 +113,6 @@ body {
   display: flex;
   justify-content: center;
   gap: 5px;
-  margin-bottom: 20px;
 }
 
 .entity-tab {
@@ -129,17 +168,17 @@ body {
 .filters {
   display: flex;
   gap: 10px;
-  margin-bottom: 20px;
   flex-wrap: wrap;
+  margin-top: 8px;
 }
 
 .filters input {
   flex: 1;
   min-width: 200px;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border: none;
   border-radius: 8px;
-  font-size: 16px;
+  font-size: 14px;
   background: rgba(255,255,255,0.1);
   color: #fff;
 }
@@ -149,10 +188,10 @@ body {
 }
 
 .filters select {
-  padding: 12px 16px;
+  padding: 10px 14px;
   border: none;
   border-radius: 8px;
-  font-size: 16px;
+  font-size: 14px;
   background: rgba(255,255,255,0.1);
   color: #fff;
   cursor: pointer;
@@ -247,10 +286,43 @@ body {
   background: #2d2d4a;
 }
 
+.ride-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
 .ride-name {
   font-size: 1.1rem;
   font-weight: bold;
-  margin-bottom: 10px;
+  flex: 1;
+}
+
+.star-btn {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(255,255,255,0.6);
+  transition: color 0.2s, transform 0.2s, -webkit-text-stroke 0.2s;
+}
+
+.star-btn:hover {
+  -webkit-text-stroke-color: rgba(255,255,255,0.9);
+}
+
+.star-btn.favorited {
+  color: #fff;
+  -webkit-text-stroke: 1.5px #fff;
+}
+
+.star-btn:active {
+  transform: scale(1.2);
 }
 
 .ride-status {
@@ -454,8 +526,11 @@ footer a {
 </head>
 <body>
   <div class="container">
-    <div class="park-toggle" id="parkToggle"></div>
-    <div class="entity-tabs" id="entityTabs"></div>
+    <div class="sticky-header">
+      <div class="park-toggle" id="parkToggle"></div>
+      <div class="entity-tabs" id="entityTabs"></div>
+      <div class="filters" id="filters"></div>
+    </div>
 
     <div id="content">
       <div class="loading">
@@ -478,6 +553,7 @@ let currentParkId = null;
 let currentEntityType = 'ATTRACTION';
 let allEntities = [];
 let liveDataMap = new Map();
+let showFavoritesOnly = false;
 
 const ENTITY_TYPES = [
   { type: 'ATTRACTION', label: 'Attractions' },
@@ -488,6 +564,31 @@ const ENTITY_TYPES = [
 
 const STORAGE_KEY = 'disneyRideHistory';
 const QUEUE_KEY = 'disneyActiveQueues';
+const FAVORITES_KEY = 'disneyFavorites';
+
+function getFavorites() {
+  try {
+    return JSON.parse(localStorage.getItem(FAVORITES_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function isFavorite(entityId) {
+  return getFavorites().includes(entityId);
+}
+
+function toggleFavorite(entityId) {
+  const favorites = getFavorites();
+  const index = favorites.indexOf(entityId);
+  if (index === -1) {
+    favorites.push(entityId);
+  } else {
+    favorites.splice(index, 1);
+  }
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+  return index === -1;
+}
 
 function getActiveQueues() {
   try {
@@ -916,13 +1017,22 @@ function renderHistory() {
   setupHistorySwipeHandlers();
 }
 
+function getParkLabel(name) {
+  if (name.includes('California Adventure')) return 'DCA';
+  if (name.includes('Disneyland')) return 'DLR';
+  return name;
+}
+
 function renderParkToggle() {
   const toggle = document.getElementById('parkToggle');
-  toggle.innerHTML = parks.map(park => `
-    <button class="park-btn ${park.id === currentParkId ? 'active' : ''}" data-park-id="${park.id}">
-      ${park.name.replace("Disney's ", '').replace(' Park', '')}
-    </button>
-  `).join('');
+  toggle.innerHTML = `
+    ${parks.map(park => `
+      <button class="park-btn ${park.id === currentParkId ? 'active' : ''}" data-park-id="${park.id}">
+        ${getParkLabel(park.name)}
+      </button>
+    `).join('')}
+    <button class="favorites-filter ${showFavoritesOnly ? 'active' : ''}">★</button>
+  `;
 
   toggle.querySelectorAll('.park-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -932,6 +1042,12 @@ function renderParkToggle() {
         loadPark(parkId);
       }
     });
+  });
+
+  toggle.querySelector('.favorites-filter').addEventListener('click', () => {
+    showFavoritesOnly = !showFavoritesOnly;
+    renderParkToggle();
+    renderApp();
   });
 }
 
@@ -973,7 +1089,11 @@ function showLoading() {
 }
 
 function renderApp() {
+  const filtersContainer = document.getElementById('filters');
+
   if (currentEntityType === 'HISTORY') {
+    filtersContainer.innerHTML = '';
+    filtersContainer.style.display = 'none';
     renderHistory();
     return;
   }
@@ -994,20 +1114,19 @@ function renderApp() {
 
   const typeLabel = ENTITY_TYPES.find(t => t.type === currentEntityType)?.label || 'items';
 
-  content.innerHTML = `
-    <div class="filters">
-      <input type="text" id="search" placeholder="Search ${typeLabel.toLowerCase()}..." />
-      <select id="sortOrder">
-        <option value="alpha">A-Z</option>
-        <option value="wait-low">Wait: Low to High</option>
-        <option value="wait-high">Wait: High to Low</option>
-        <option value="ll-early">LL: Earliest First</option>
-        <option value="ll-late">LL: Latest First</option>
-      </select>
-    </div>
-
-    <div class="rides-grid" id="ridesGrid"></div>
+  filtersContainer.style.display = 'flex';
+  filtersContainer.innerHTML = `
+    <input type="text" id="search" placeholder="Search ${typeLabel.toLowerCase()}..." />
+    <select id="sortOrder">
+      <option value="alpha">A-Z</option>
+      <option value="wait-low">Wait: Low to High</option>
+      <option value="wait-high">Wait: High to Low</option>
+      <option value="ll-early">LL: Earliest First</option>
+      <option value="ll-late">LL: Latest First</option>
+    </select>
   `;
+
+  content.innerHTML = `<div class="rides-grid" id="ridesGrid"></div>`;
 
   const searchInput = document.getElementById('search');
   const sortOrder = document.getElementById('sortOrder');
@@ -1018,7 +1137,9 @@ function renderApp() {
     const sortValue = sortOrder.value;
 
     const results = itemsWithLive.filter(item => {
-      return item.name.toLowerCase().includes(searchTerm);
+      const matchesSearch = item.name.toLowerCase().includes(searchTerm);
+      const matchesFavorites = !showFavoritesOnly || isFavorite(item.id);
+      return matchesSearch && matchesFavorites;
     });
 
     results.sort((a, b) => {
@@ -1058,12 +1179,16 @@ function renderApp() {
     ridesGrid.innerHTML = results.map(item => {
       const inQueue = isInQueue(item.id);
       const queueStart = getQueueStartTime(item.id);
+      const favorited = isFavorite(item.id);
       return `
         <div class="card-wrapper" data-ride-id="${item.id}" data-ride-name="${item.name}">
           <div class="card-action card-action-right">Start timer</div>
           <div class="card-action card-action-left">Log ride</div>
           <div class="ride-card ${inQueue ? 'in-queue' : ''}">
-            <div class="ride-name">${item.name}</div>
+            <div class="ride-header">
+              <div class="ride-name">${item.name}</div>
+              <button class="star-btn ${favorited ? 'favorited' : ''}" data-entity-id="${item.id}">★</button>
+            </div>
             <div class="status-row">
               ${item.waitTime !== null ? `<span class="wait-time">${item.waitTime} <span>min</span></span>` : ''}
               ${item.returnStart ? `<span class="ll-time">LL ${formatReturnTime(item.returnStart)}</span>` : ''}
@@ -1083,6 +1208,15 @@ function renderApp() {
 
     setupSwipeHandlers();
     startQueueTimers();
+
+    document.querySelectorAll('.star-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const entityId = btn.dataset.entityId;
+        const isNowFavorited = toggleFavorite(entityId);
+        btn.classList.toggle('favorited', isNowFavorited);
+      });
+    });
   }
 
   searchInput.addEventListener('input', renderItems);
