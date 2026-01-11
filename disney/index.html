@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Disneyland Resort Rides</title>
+  <style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Helvetica, Arial, sans-serif;
+  margin: 0;
+  padding: 20px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  min-height: 100vh;
+  color: #fff;
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.park-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 30px;
+}
+
+.park-btn {
+  padding: 12px 24px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 30px;
+  background: transparent;
+  color: #fff;
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.park-btn:hover {
+  border-color: rgba(255,255,255,0.6);
+  background: rgba(255,255,255,0.1);
+}
+
+.park-btn.active {
+  background: #fff;
+  color: #1a1a2e;
+  border-color: #fff;
+}
+
+.entity-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  margin-bottom: 20px;
+}
+
+.entity-tab {
+  padding: 8px 18px;
+  border: none;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.7);
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.entity-tab:hover {
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+}
+
+.entity-tab.active {
+  background: rgba(255,255,255,0.25);
+  color: #fff;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  font-size: 1.2rem;
+}
+
+.spinner {
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255,255,255,0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+  margin-bottom: 15px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error {
+  background: #ff4444;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.filters {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.filters input {
+  flex: 1;
+  min-width: 200px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+
+.filters input::placeholder {
+  color: rgba(255,255,255,0.5);
+}
+
+.filters select {
+  padding: 12px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+  cursor: pointer;
+}
+
+.rides-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.ride-card {
+  background: rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 20px;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.ride-card:hover {
+  transform: translateY(-3px);
+  background: rgba(255,255,255,0.15);
+}
+
+.ride-name {
+  font-size: 1.1rem;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.ride-status {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.status-operating {
+  background: #4caf50;
+  color: #fff;
+}
+
+.status-closed {
+  background: #f44336;
+  color: #fff;
+}
+
+.status-down {
+  background: #ff9800;
+  color: #fff;
+}
+
+.status-refurbishment {
+  background: #9c27b0;
+  color: #fff;
+}
+
+.status-unknown {
+  background: #607d8b;
+  color: #fff;
+}
+
+.wait-time {
+  margin-top: 10px;
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.wait-time span {
+  font-size: 0.9rem;
+  font-weight: normal;
+  color: #aaa;
+}
+
+.return-time {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(100, 181, 246, 0.2);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.return-time-label {
+  color: #64b5f6;
+  font-weight: bold;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.return-time-value {
+  font-weight: bold;
+}
+
+.showtimes {
+  margin-top: 10px;
+}
+
+.showtimes-label {
+  font-size: 0.75rem;
+  color: #aaa;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.showtimes-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.showtime {
+  background: rgba(255,255,255,0.15);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.showtime.past {
+  opacity: 0.4;
+}
+
+.showtime.next {
+  background: #4caf50;
+  font-weight: bold;
+}
+
+.no-results {
+  text-align: center;
+  padding: 40px;
+  color: #aaa;
+}
+
+footer {
+  text-align: center;
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  color: #666;
+  font-size: 0.85rem;
+}
+
+footer a {
+  color: #888;
+}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="park-toggle" id="parkToggle"></div>
+    <div class="entity-tabs" id="entityTabs"></div>
+
+    <div id="content">
+      <div class="loading">
+        <div class="spinner"></div>
+        <div>Loading rides...</div>
+      </div>
+    </div>
+
+    <footer>
+      Data provided by <a href="https://themeparks.wiki" target="_blank">ThemeParks.wiki</a>
+    </footer>
+  </div>
+
+<script type="module">
+const API_BASE = 'https://api.themeparks.wiki/v1';
+const DISNEYLAND_SLUG = 'disneylandresortcalifornia';
+
+let parks = [];
+let currentParkId = null;
+let currentEntityType = 'ATTRACTION';
+let allEntities = [];
+let liveDataMap = new Map();
+
+const ENTITY_TYPES = [
+  { type: 'ATTRACTION', label: 'Attractions' },
+  { type: 'SHOW', label: 'Shows' },
+  { type: 'RESTAURANT', label: 'Restaurants' }
+];
+
+async function fetchDestinations() {
+  const response = await fetch(`${API_BASE}/destinations`);
+  if (!response.ok) throw new Error('Failed to fetch destinations');
+  return response.json();
+}
+
+async function fetchChildren(entityId) {
+  const response = await fetch(`${API_BASE}/entity/${entityId}/children`);
+  if (!response.ok) throw new Error('Failed to fetch children');
+  return response.json();
+}
+
+async function fetchLiveData(entityId) {
+  const response = await fetch(`${API_BASE}/entity/${entityId}/live`);
+  if (!response.ok) throw new Error('Failed to fetch live data');
+  return response.json();
+}
+
+function getStatusClass(status) {
+  const statusMap = {
+    'OPERATING': 'status-operating',
+    'CLOSED': 'status-closed',
+    'DOWN': 'status-down',
+    'REFURBISHMENT': 'status-refurbishment'
+  };
+  return statusMap[status] || 'status-unknown';
+}
+
+function formatStatus(status) {
+  if (!status) return 'Unknown';
+  return status.charAt(0) + status.slice(1).toLowerCase();
+}
+
+function formatReturnTime(isoString) {
+  const date = new Date(isoString);
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+}
+
+function renderShowtimes(showtimes) {
+  if (!showtimes || showtimes.length === 0) return '';
+
+  const now = new Date();
+  let foundNext = false;
+
+  const times = showtimes.map(st => {
+    const time = new Date(st.startTime);
+    const isPast = time < now;
+    let isNext = false;
+
+    if (!isPast && !foundNext) {
+      isNext = true;
+      foundNext = true;
+    }
+
+    const timeStr = time.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    let className = 'showtime';
+    if (isPast) className += ' past';
+    if (isNext) className += ' next';
+
+    return `<span class="${className}">${timeStr}</span>`;
+  });
+
+  return `
+    <div class="showtimes">
+      <div class="showtimes-label">Showtimes</div>
+      <div class="showtimes-list">${times.join('')}</div>
+    </div>
+  `;
+}
+
+function renderParkToggle() {
+  const toggle = document.getElementById('parkToggle');
+  toggle.innerHTML = parks.map(park => `
+    <button class="park-btn ${park.id === currentParkId ? 'active' : ''}" data-park-id="${park.id}">
+      ${park.name.replace("Disney's ", '').replace(' Park', '')}
+    </button>
+  `).join('');
+
+  toggle.querySelectorAll('.park-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const parkId = btn.dataset.parkId;
+      if (parkId !== currentParkId) {
+        currentParkId = parkId;
+        loadPark(parkId);
+      }
+    });
+  });
+}
+
+function renderEntityTabs() {
+  const tabs = document.getElementById('entityTabs');
+  tabs.innerHTML = ENTITY_TYPES.map(et => `
+    <button class="entity-tab ${et.type === currentEntityType ? 'active' : ''}" data-type="${et.type}">
+      ${et.label}
+    </button>
+  `).join('');
+
+  tabs.querySelectorAll('.entity-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset.type;
+      if (type !== currentEntityType) {
+        currentEntityType = type;
+        renderEntityTabs();
+        renderApp();
+      }
+    });
+  });
+}
+
+function showLoading() {
+  document.getElementById('content').innerHTML = `
+    <div class="loading">
+      <div class="spinner"></div>
+      <div>Loading...</div>
+    </div>
+  `;
+}
+
+function renderApp() {
+  const content = document.getElementById('content');
+
+  const filtered = allEntities.filter(e => e.entityType === currentEntityType);
+  const itemsWithLive = filtered.map(item => {
+    const live = liveDataMap.get(item.id) || {};
+    return {
+      ...item,
+      status: live.status || 'UNKNOWN',
+      waitTime: live.queue?.STANDBY?.waitTime ?? null,
+      returnStart: live.queue?.RETURN_TIME?.returnStart ?? null,
+      showtimes: live.showtimes || []
+    };
+  });
+
+  const typeLabel = ENTITY_TYPES.find(t => t.type === currentEntityType)?.label || 'items';
+
+  content.innerHTML = `
+    <div class="filters">
+      <input type="text" id="search" placeholder="Search ${typeLabel.toLowerCase()}..." />
+      <select id="statusFilter">
+        <option value="">All Status</option>
+        <option value="OPERATING">Operating</option>
+        <option value="CLOSED">Closed</option>
+        <option value="DOWN">Down</option>
+        <option value="REFURBISHMENT">Refurbishment</option>
+      </select>
+      <select id="sortOrder">
+        <option value="alpha">A-Z</option>
+        <option value="wait-low">Wait: Low to High</option>
+        <option value="wait-high">Wait: High to Low</option>
+        <option value="ll-early">LL: Earliest First</option>
+        <option value="ll-late">LL: Latest First</option>
+      </select>
+    </div>
+
+    <div class="rides-grid" id="ridesGrid"></div>
+  `;
+
+  const searchInput = document.getElementById('search');
+  const statusFilter = document.getElementById('statusFilter');
+  const sortOrder = document.getElementById('sortOrder');
+  const ridesGrid = document.getElementById('ridesGrid');
+
+  function renderItems() {
+    const searchTerm = searchInput.value.toLowerCase();
+    const statusValue = statusFilter.value;
+    const sortValue = sortOrder.value;
+
+    const results = itemsWithLive.filter(item => {
+      const matchesSearch = item.name.toLowerCase().includes(searchTerm);
+      const matchesStatus = !statusValue || item.status === statusValue;
+      return matchesSearch && matchesStatus;
+    });
+
+    results.sort((a, b) => {
+      switch (sortValue) {
+        case 'alpha':
+          return a.name.localeCompare(b.name);
+        case 'wait-low':
+          if (a.waitTime === null && b.waitTime === null) return a.name.localeCompare(b.name);
+          if (a.waitTime === null) return 1;
+          if (b.waitTime === null) return -1;
+          return a.waitTime - b.waitTime;
+        case 'wait-high':
+          if (a.waitTime === null && b.waitTime === null) return a.name.localeCompare(b.name);
+          if (a.waitTime === null) return 1;
+          if (b.waitTime === null) return -1;
+          return b.waitTime - a.waitTime;
+        case 'll-early':
+          if (!a.returnStart && !b.returnStart) return a.name.localeCompare(b.name);
+          if (!a.returnStart) return 1;
+          if (!b.returnStart) return -1;
+          return new Date(a.returnStart) - new Date(b.returnStart);
+        case 'll-late':
+          if (!a.returnStart && !b.returnStart) return a.name.localeCompare(b.name);
+          if (!a.returnStart) return 1;
+          if (!b.returnStart) return -1;
+          return new Date(b.returnStart) - new Date(a.returnStart);
+        default:
+          return a.name.localeCompare(b.name);
+      }
+    });
+
+    if (results.length === 0) {
+      ridesGrid.innerHTML = `<div class="no-results">No ${typeLabel.toLowerCase()} found</div>`;
+      return;
+    }
+
+    ridesGrid.innerHTML = results.map(item => `
+      <div class="ride-card">
+        <div class="ride-name">${item.name}</div>
+        <span class="ride-status ${getStatusClass(item.status)}">${formatStatus(item.status)}</span>
+        ${item.waitTime !== null ? `
+          <div class="wait-time">${item.waitTime} <span>min wait</span></div>
+        ` : ''}
+        ${item.returnStart ? `
+          <div class="return-time">
+            <div class="return-time-label">Lightning Lane</div>
+            <div class="return-time-value">${formatReturnTime(item.returnStart)}</div>
+          </div>
+        ` : ''}
+        ${renderShowtimes(item.showtimes)}
+      </div>
+    `).join('');
+  }
+
+  searchInput.addEventListener('input', renderItems);
+  statusFilter.addEventListener('change', renderItems);
+  sortOrder.addEventListener('change', renderItems);
+  renderItems();
+}
+
+function showError(message) {
+  document.getElementById('content').innerHTML = `
+    <div class="error">${message}</div>
+  `;
+}
+
+async function loadPark(parkId) {
+  showLoading();
+  renderParkToggle();
+  renderEntityTabs();
+
+  try {
+    const [childrenData, liveData] = await Promise.all([
+      fetchChildren(parkId),
+      fetchLiveData(parkId)
+    ]);
+
+    allEntities = childrenData.children;
+
+    liveDataMap = new Map();
+    if (liveData.liveData) {
+      liveData.liveData.forEach(item => {
+        liveDataMap.set(item.id, item);
+      });
+    }
+
+    renderApp();
+  } catch (error) {
+    console.error(error);
+    showError(`Error loading data: ${error.message}`);
+  }
+}
+
+async function init() {
+  try {
+    const destinations = await fetchDestinations();
+
+    const disneylandResort = destinations.destinations.find(d =>
+      d.slug === DISNEYLAND_SLUG || d.name.includes('Disneyland Resort')
+    );
+
+    if (!disneylandResort) {
+      throw new Error('Disneyland Resort not found');
+    }
+
+    parks = disneylandResort.parks.filter(p =>
+      p.name.includes('Disneyland') || p.name.includes('California Adventure')
+    );
+
+    if (parks.length === 0) {
+      throw new Error('No parks found');
+    }
+
+    currentParkId = parks[0].id;
+    loadPark(currentParkId);
+  } catch (error) {
+    console.error(error);
+    showError(`Error loading parks: ${error.message}`);
+  }
+}
+
+init();
+</script>
+</body>
+</html>
