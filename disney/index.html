@@ -148,16 +148,85 @@ body {
   gap: 16px;
 }
 
+.card-wrapper {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.card-action {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.card-action-left {
+  right: 0;
+  justify-content: flex-end;
+  padding-right: 20px;
+  background: #4caf50;
+}
+
+.card-action-left.ready {
+  background: #2e7d32;
+}
+
+.card-action-right {
+  left: 0;
+  justify-content: flex-start;
+  padding-left: 20px;
+  background: #2196f3;
+}
+
+.card-action-right.ready {
+  background: #1565c0;
+}
+
+.ride-card.in-queue {
+  border: 2px solid #2196f3;
+}
+
+.queue-timer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: rgba(33, 150, 243, 0.2);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.queue-timer-label {
+  color: #64b5f6;
+}
+
+.queue-timer-value {
+  font-weight: bold;
+  font-family: monospace;
+  font-size: 1rem;
+}
+
 .ride-card {
-  background: rgba(255,255,255,0.1);
+  position: relative;
+  background: #252542;
   border-radius: 12px;
   padding: 20px;
-  transition: transform 0.2s, background 0.2s;
+  transition: background 0.2s;
+  touch-action: pan-y pinch-zoom;
+}
+
+.ride-card.swiping {
+  transition: none;
 }
 
 .ride-card:hover {
-  transform: translateY(-3px);
-  background: rgba(255,255,255,0.15);
+  background: #2d2d4a;
 }
 
 .ride-name {
@@ -200,35 +269,26 @@ body {
   color: #fff;
 }
 
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
 .wait-time {
-  margin-top: 10px;
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   font-weight: bold;
 }
 
 .wait-time span {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: normal;
   color: #aaa;
 }
 
-.return-time {
-  margin-top: 8px;
-  padding: 8px 12px;
-  background: rgba(100, 181, 246, 0.2);
-  border-radius: 6px;
-  font-size: 0.9rem;
-}
-
-.return-time-label {
+.ll-time {
   color: #64b5f6;
-  font-weight: bold;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  margin-bottom: 2px;
-}
-
-.return-time-value {
   font-weight: bold;
 }
 
@@ -269,6 +329,95 @@ body {
   text-align: center;
   padding: 40px;
   color: #aaa;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-wrapper {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.history-delete-action {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  background: #f44336;
+  display: flex;
+  align-items: center;
+  padding-left: 20px;
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.history-delete-action.ready {
+  background: #c62828;
+}
+
+.history-item {
+  position: relative;
+  background: #252542;
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  touch-action: pan-y pinch-zoom;
+}
+
+.history-item.swiping {
+  transition: none;
+}
+
+.history-ride-name {
+  font-weight: bold;
+}
+
+.history-park {
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+.history-time {
+  text-align: right;
+  font-size: 0.85rem;
+  color: #aaa;
+}
+
+.history-date {
+  color: #fff;
+  font-weight: bold;
+}
+
+.logged-toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #4caf50;
+  color: #fff;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: bold;
+  z-index: 1000;
+  animation: toastIn 0.3s ease, toastOut 0.3s ease 1.7s forwards;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 footer {
@@ -315,8 +464,133 @@ let liveDataMap = new Map();
 const ENTITY_TYPES = [
   { type: 'ATTRACTION', label: 'Attractions' },
   { type: 'SHOW', label: 'Shows' },
-  { type: 'RESTAURANT', label: 'Restaurants' }
+  { type: 'RESTAURANT', label: 'Restaurants' },
+  { type: 'HISTORY', label: 'History' }
 ];
+
+const STORAGE_KEY = 'disneyRideHistory';
+const QUEUE_KEY = 'disneyActiveQueues';
+
+function getActiveQueues() {
+  try {
+    return JSON.parse(localStorage.getItem(QUEUE_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function startQueue(ride, parkName) {
+  const queues = getActiveQueues();
+  queues[ride.id] = {
+    id: ride.id,
+    name: ride.name,
+    parkName: parkName,
+    startTime: new Date().toISOString()
+  };
+  localStorage.setItem(QUEUE_KEY, JSON.stringify(queues));
+  showToast(`Started queue: ${ride.name}`);
+}
+
+function endQueue(rideId) {
+  const queues = getActiveQueues();
+  const queue = queues[rideId];
+  delete queues[rideId];
+  localStorage.setItem(QUEUE_KEY, JSON.stringify(queues));
+  return queue;
+}
+
+function isInQueue(rideId) {
+  const queues = getActiveQueues();
+  return !!queues[rideId];
+}
+
+function getQueueStartTime(rideId) {
+  const queues = getActiveQueues();
+  return queues[rideId]?.startTime;
+}
+
+function formatElapsedTime(startTime) {
+  const start = new Date(startTime);
+  const now = new Date();
+  const diff = Math.floor((now - start) / 1000);
+  const mins = Math.floor(diff / 60);
+  const secs = diff % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+let queueTimerInterval = null;
+
+function startQueueTimers() {
+  if (queueTimerInterval) {
+    clearInterval(queueTimerInterval);
+  }
+
+  queueTimerInterval = setInterval(() => {
+    const timers = document.querySelectorAll('.queue-timer-value');
+    timers.forEach(timer => {
+      const startTime = timer.dataset.queueStart;
+      if (startTime) {
+        timer.textContent = formatElapsedTime(startTime);
+      }
+    });
+  }, 1000);
+}
+
+function getRideHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function addRideToHistory(ride, parkName) {
+  const history = getRideHistory();
+  const queue = endQueue(ride.id);
+
+  let actualWaitMins = null;
+  if (queue) {
+    const start = new Date(queue.startTime);
+    const now = new Date();
+    actualWaitMins = Math.round((now - start) / 60000);
+  }
+
+  history.unshift({
+    id: ride.id,
+    name: ride.name,
+    parkName: parkName,
+    timestamp: new Date().toISOString(),
+    actualWaitMins: actualWaitMins
+  });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+
+  const waitMsg = actualWaitMins !== null ? ` (${actualWaitMins} min wait)` : '';
+  showToast(`Logged: ${ride.name}${waitMsg}`);
+}
+
+function removeFromHistory(index) {
+  const history = getRideHistory();
+  const removed = history.splice(index, 1)[0];
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+  showToast(`Removed: ${removed.name}`);
+  renderHistory();
+}
+
+function showToast(message) {
+  const existing = document.querySelector('.logged-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = 'logged-toast';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2000);
+}
+
+function getCurrentParkName() {
+  const park = parks.find(p => p.id === currentParkId);
+  return park ? park.name : 'Unknown Park';
+}
 
 async function fetchDestinations() {
   const response = await fetch(`${API_BASE}/destinations`);
@@ -397,6 +671,233 @@ function renderShowtimes(showtimes) {
   `;
 }
 
+function setupSwipeHandlers() {
+  const cards = document.querySelectorAll('.card-wrapper');
+
+  cards.forEach(wrapper => {
+    const card = wrapper.querySelector('.ride-card');
+    const actionLeft = wrapper.querySelector('.card-action-left');
+    const actionRight = wrapper.querySelector('.card-action-right');
+    const rideId = wrapper.dataset.rideId;
+    const inQueue = isInQueue(rideId);
+
+    let startX = 0;
+    let currentX = 0;
+    let isDragging = false;
+
+    function handleStart(e) {
+      if (e.type === 'mousedown' && e.button !== 0) return;
+      startX = e.touches ? e.touches[0].clientX : e.clientX;
+      currentX = startX;
+      isDragging = true;
+      card.classList.add('swiping');
+
+      if (e.type === 'mousedown') {
+        document.addEventListener('mousemove', handleMove);
+        document.addEventListener('mouseup', handleEnd);
+      }
+    }
+
+    function handleMove(e) {
+      if (!isDragging) return;
+      currentX = e.touches ? e.touches[0].clientX : e.clientX;
+      const diff = currentX - startX;
+      const percent = Math.abs(diff) / wrapper.offsetWidth;
+
+      card.style.transform = `translateX(${diff}px)`;
+
+      if (diff < 0) {
+        // Swiping left - log ride
+        if (percent > 0.25) {
+          actionLeft.classList.add('ready');
+          actionLeft.textContent = 'Release to log';
+        } else {
+          actionLeft.classList.remove('ready');
+          actionLeft.textContent = 'Log ride';
+        }
+        actionRight.classList.remove('ready');
+        actionRight.textContent = inQueue ? 'Cancel queue' : 'Join queue';
+      } else if (diff > 0) {
+        // Swiping right - join/cancel queue
+        if (percent > 0.25) {
+          actionRight.classList.add('ready');
+          actionRight.textContent = inQueue ? 'Release to cancel' : 'Release to join';
+        } else {
+          actionRight.classList.remove('ready');
+          actionRight.textContent = inQueue ? 'Cancel queue' : 'Join queue';
+        }
+        actionLeft.classList.remove('ready');
+        actionLeft.textContent = 'Log ride';
+      }
+    }
+
+    function handleEnd(e) {
+      if (!isDragging) return;
+      isDragging = false;
+      card.classList.remove('swiping');
+
+      const diff = currentX - startX;
+      const percent = Math.abs(diff) / wrapper.offsetWidth;
+
+      if (percent > 0.25) {
+        const ride = allEntities.find(r => r.id === rideId);
+        if (ride) {
+          if (diff < 0) {
+            // Swipe left - log ride
+            addRideToHistory(ride, getCurrentParkName());
+            renderApp();
+            return;
+          } else {
+            // Swipe right - toggle queue
+            if (inQueue) {
+              endQueue(rideId);
+              showToast(`Left queue: ${ride.name}`);
+            } else {
+              startQueue(ride, getCurrentParkName());
+            }
+            renderApp();
+            return;
+          }
+        }
+      }
+
+      card.style.transform = '';
+      actionLeft.classList.remove('ready');
+      actionLeft.textContent = 'Log ride';
+      actionRight.classList.remove('ready');
+      actionRight.textContent = inQueue ? 'Cancel queue' : 'Join queue';
+      currentX = 0;
+      startX = 0;
+
+      if (e.type === 'mouseup') {
+        document.removeEventListener('mousemove', handleMove);
+        document.removeEventListener('mouseup', handleEnd);
+      }
+    }
+
+    card.addEventListener('touchstart', handleStart, { passive: true });
+    card.addEventListener('touchmove', handleMove, { passive: true });
+    card.addEventListener('touchend', handleEnd);
+    card.addEventListener('mousedown', handleStart);
+  });
+}
+
+function setupHistorySwipeHandlers() {
+  const items = document.querySelectorAll('.history-wrapper');
+
+  items.forEach(wrapper => {
+    const item = wrapper.querySelector('.history-item');
+    const action = wrapper.querySelector('.history-delete-action');
+    const index = parseInt(wrapper.dataset.index);
+
+    let startX = 0;
+    let currentX = 0;
+    let isDragging = false;
+
+    function handleStart(e) {
+      if (e.type === 'mousedown' && e.button !== 0) return;
+      startX = e.touches ? e.touches[0].clientX : e.clientX;
+      currentX = startX;
+      isDragging = true;
+      item.classList.add('swiping');
+
+      if (e.type === 'mousedown') {
+        document.addEventListener('mousemove', handleMove);
+        document.addEventListener('mouseup', handleEnd);
+      }
+    }
+
+    function handleMove(e) {
+      if (!isDragging) return;
+      currentX = e.touches ? e.touches[0].clientX : e.clientX;
+      const diff = Math.max(0, currentX - startX);
+      const percent = diff / wrapper.offsetWidth;
+
+      item.style.transform = `translateX(${diff}px)`;
+
+      if (percent > 0.25) {
+        action.classList.add('ready');
+        action.textContent = 'Release to remove';
+      } else {
+        action.classList.remove('ready');
+        action.textContent = 'Remove';
+      }
+    }
+
+    function handleEnd(e) {
+      if (!isDragging) return;
+      isDragging = false;
+      item.classList.remove('swiping');
+
+      const diff = currentX - startX;
+      const percent = diff / wrapper.offsetWidth;
+
+      if (percent > 0.25 && diff > 0) {
+        removeFromHistory(index);
+        return;
+      }
+
+      item.style.transform = '';
+      action.classList.remove('ready');
+      action.textContent = 'Remove';
+      currentX = 0;
+      startX = 0;
+
+      if (e.type === 'mouseup') {
+        document.removeEventListener('mousemove', handleMove);
+        document.removeEventListener('mouseup', handleEnd);
+      }
+    }
+
+    item.addEventListener('touchstart', handleStart, { passive: true });
+    item.addEventListener('touchmove', handleMove, { passive: true });
+    item.addEventListener('touchend', handleEnd);
+    item.addEventListener('mousedown', handleStart);
+  });
+}
+
+function renderHistory() {
+  const content = document.getElementById('content');
+  const history = getRideHistory();
+
+  if (history.length === 0) {
+    content.innerHTML = '<div class="no-results">No rides logged yet. Swipe left on a ride to log it.</div>';
+    return;
+  }
+
+  const formatDate = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const formatTime = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  };
+
+  content.innerHTML = `
+    <div class="history-list">
+      ${history.map((item, index) => `
+        <div class="history-wrapper" data-index="${index}">
+          <div class="history-delete-action">Remove</div>
+          <div class="history-item">
+            <div>
+              <div class="history-ride-name">${item.name}</div>
+              <div class="history-park">${item.parkName}${item.actualWaitMins !== null ? ` • ${item.actualWaitMins} min wait` : ''}</div>
+            </div>
+            <div class="history-time">
+              <div class="history-date">${formatDate(item.timestamp)}</div>
+              <div>${formatTime(item.timestamp)}</div>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  setupHistorySwipeHandlers();
+}
+
 function renderParkToggle() {
   const toggle = document.getElementById('parkToggle');
   toggle.innerHTML = parks.map(park => `
@@ -418,11 +919,15 @@ function renderParkToggle() {
 
 function renderEntityTabs() {
   const tabs = document.getElementById('entityTabs');
+  const parkToggle = document.getElementById('parkToggle');
+
   tabs.innerHTML = ENTITY_TYPES.map(et => `
     <button class="entity-tab ${et.type === currentEntityType ? 'active' : ''}" data-type="${et.type}">
       ${et.label}
     </button>
   `).join('');
+
+  parkToggle.style.display = currentEntityType === 'HISTORY' ? 'none' : 'flex';
 
   tabs.querySelectorAll('.entity-tab').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -430,7 +935,11 @@ function renderEntityTabs() {
       if (type !== currentEntityType) {
         currentEntityType = type;
         renderEntityTabs();
-        renderApp();
+        if (type === 'HISTORY') {
+          renderHistory();
+        } else {
+          renderApp();
+        }
       }
     });
   });
@@ -446,6 +955,11 @@ function showLoading() {
 }
 
 function renderApp() {
+  if (currentEntityType === 'HISTORY') {
+    renderHistory();
+    return;
+  }
+
   const content = document.getElementById('content');
 
   const filtered = allEntities.filter(e => e.entityType === currentEntityType);
@@ -534,22 +1048,34 @@ function renderApp() {
       return;
     }
 
-    ridesGrid.innerHTML = results.map(item => `
-      <div class="ride-card">
-        <div class="ride-name">${item.name}</div>
-        <span class="ride-status ${getStatusClass(item.status)}">${formatStatus(item.status)}</span>
-        ${item.waitTime !== null ? `
-          <div class="wait-time">${item.waitTime} <span>min wait</span></div>
-        ` : ''}
-        ${item.returnStart ? `
-          <div class="return-time">
-            <div class="return-time-label">Lightning Lane</div>
-            <div class="return-time-value">${formatReturnTime(item.returnStart)}</div>
+    ridesGrid.innerHTML = results.map(item => {
+      const inQueue = isInQueue(item.id);
+      const queueStart = getQueueStartTime(item.id);
+      return `
+        <div class="card-wrapper" data-ride-id="${item.id}" data-ride-name="${item.name}">
+          <div class="card-action card-action-right">Join queue</div>
+          <div class="card-action card-action-left">Log ride</div>
+          <div class="ride-card ${inQueue ? 'in-queue' : ''}">
+            <div class="ride-name">${item.name}</div>
+            <div class="status-row">
+              ${item.waitTime !== null ? `<span class="wait-time">${item.waitTime} <span>min</span></span>` : ''}
+              ${item.returnStart ? `<span class="ll-time">LL ${formatReturnTime(item.returnStart)}</span>` : ''}
+              <span class="ride-status ${getStatusClass(item.status)}">${formatStatus(item.status)}</span>
+            </div>
+            ${inQueue ? `
+              <div class="queue-timer">
+                <span class="queue-timer-label">In queue:</span>
+                <span class="queue-timer-value" data-queue-start="${queueStart}">${formatElapsedTime(queueStart)}</span>
+              </div>
+            ` : ''}
+            ${renderShowtimes(item.showtimes)}
           </div>
-        ` : ''}
-        ${renderShowtimes(item.showtimes)}
-      </div>
-    `).join('');
+        </div>
+      `;
+    }).join('');
+
+    setupSwipeHandlers();
+    startQueueTimers();
   }
 
   searchInput.addEventListener('input', renderItems);
