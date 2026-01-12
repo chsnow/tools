@@ -420,6 +420,17 @@ body {
   font-weight: bold;
 }
 
+.stale-warning {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  background: #ff9800;
+  color: #fff;
+  text-transform: uppercase;
+}
+
 .no-results {
   text-align: center;
   padding: 40px;
@@ -1123,6 +1134,15 @@ function formatReturnTime(isoString) {
   });
 }
 
+function isDataStale(lastUpdated) {
+  if (!lastUpdated) return false;
+  const updated = new Date(lastUpdated);
+  const now = new Date();
+  const diffMs = now - updated;
+  const oneHourMs = 60 * 60 * 1000;
+  return diffMs > oneHourMs;
+}
+
 function renderShowtimes(showtimes) {
   if (!showtimes || showtimes.length === 0) return '';
 
@@ -1546,7 +1566,8 @@ function renderApp() {
       waitTime: live.queue?.STANDBY?.waitTime ?? null,
       returnStart: live.queue?.RETURN_TIME?.returnStart ?? null,
       hasLightningLane: !!live.queue?.RETURN_TIME,
-      showtimes: live.showtimes || []
+      showtimes: live.showtimes || [],
+      lastUpdated: live.lastUpdated || null
     };
   });
 
@@ -1637,6 +1658,7 @@ function renderApp() {
               ${item.waitTime !== null ? `<span class="wait-time">${item.waitTime} <span>min</span></span>` : ''}
               ${item.returnStart ? `<span class="ll-time">LL ${formatReturnTime(item.returnStart)}</span>` : (item.hasLightningLane ? `<span class="ll-sold-out">LL SOLD OUT</span>` : '')}
               <span class="ride-status ${getStatusClass(item.status)}">${formatStatus(item.status)}</span>
+              ${isDataStale(item.lastUpdated) ? '<span class="stale-warning">Stale</span>' : ''}
             </div>
             ${inQueue ? `
               <div class="queue-timer">
