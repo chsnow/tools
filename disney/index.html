@@ -382,6 +382,11 @@ body {
   font-weight: bold;
 }
 
+.ll-sold-out {
+  color: #ff6b6b;
+  font-weight: bold;
+}
+
 .showtimes {
   margin-top: 10px;
 }
@@ -1115,6 +1120,7 @@ function renderApp() {
       status: live.status || 'UNKNOWN',
       waitTime: live.queue?.STANDBY?.waitTime ?? null,
       returnStart: live.queue?.RETURN_TIME?.returnStart ?? null,
+      hasLightningLane: !!live.queue?.RETURN_TIME,
       showtimes: live.showtimes || []
     };
   });
@@ -1169,9 +1175,14 @@ function renderApp() {
           if (!b.returnStart) return -1;
           return new Date(a.returnStart) - new Date(b.returnStart);
         case 'll-late':
-          if (!a.returnStart && !b.returnStart) return a.name.localeCompare(b.name);
-          if (!a.returnStart) return 1;
-          if (!b.returnStart) return -1;
+          if (!a.returnStart && !b.returnStart) {
+            if (a.hasLightningLane && b.hasLightningLane) return a.name.localeCompare(b.name);
+            if (a.hasLightningLane) return -1;
+            if (b.hasLightningLane) return 1;
+            return a.name.localeCompare(b.name);
+          }
+          if (!a.returnStart) return a.hasLightningLane ? -1 : 1;
+          if (!b.returnStart) return b.hasLightningLane ? 1 : -1;
           return new Date(b.returnStart) - new Date(a.returnStart);
         default:
           return a.name.localeCompare(b.name);
@@ -1198,7 +1209,7 @@ function renderApp() {
             </div>
             <div class="status-row">
               ${item.waitTime !== null ? `<span class="wait-time">${item.waitTime} <span>min</span></span>` : ''}
-              ${item.returnStart ? `<span class="ll-time">LL ${formatReturnTime(item.returnStart)}</span>` : ''}
+              ${item.returnStart ? `<span class="ll-time">LL ${formatReturnTime(item.returnStart)}</span>` : (item.hasLightningLane ? `<span class="ll-sold-out">LL SOLD OUT</span>` : '')}
               <span class="ride-status ${getStatusClass(item.status)}">${formatStatus(item.status)}</span>
             </div>
             ${inQueue ? `
