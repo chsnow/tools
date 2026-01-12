@@ -747,6 +747,21 @@ footer a {
 .pull-to-refresh.refreshing .pull-spinner {
   display: block;
 }
+
+/* Desktop: hide mobile-only swipe UI elements */
+@media (min-width: 768px) {
+  .card-action {
+    display: none;
+  }
+
+  .history-delete-action {
+    display: none;
+  }
+
+  .pull-to-refresh {
+    display: none;
+  }
+}
   </style>
 </head>
 <body>
