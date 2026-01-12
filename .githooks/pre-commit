@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# Auto-update version timestamp in disney/index.html
+
+# Check if disney/index.html is staged for commit
+if git diff --cached --name-only | grep -q "^disney/index.html$"; then
+  # Get current timestamp
+  TIMESTAMP=$(date "+%Y-%m-%d %H:%M")
+
+  # Update the version line in the file
+  sed -i "s/Version: [0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\} [0-9]\{2\}:[0-9]\{2\}/Version: $TIMESTAMP/" disney/index.html
+
+  # Re-stage the file with the updated timestamp
+  git add disney/index.html
+fi
