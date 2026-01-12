@@ -1344,8 +1344,7 @@ async function shareHistory() {
     try {
       await navigator.share({
         title: 'My Disneyland Ride History',
-        text: `Check out my ${history.length} ride${history.length !== 1 ? 's' : ''} at Disneyland!`,
-        url: shareUrl
+        text: `Check out my ${history.length} ride${history.length !== 1 ? 's' : ''} at Disneyland!\n${shareUrl}`
       });
       return;
     } catch (e) {
