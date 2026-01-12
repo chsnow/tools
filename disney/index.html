@@ -652,6 +652,7 @@ const ENTITY_TYPES = [
 const STORAGE_KEY = 'disneyRideHistory';
 const QUEUE_KEY = 'disneyActiveQueues';
 const FAVORITES_KEY = 'disneyFavorites';
+const SORT_ORDER_KEY = 'disneySortOrder';
 
 function getFavorites() {
   try {
@@ -675,6 +676,14 @@ function toggleFavorite(entityId) {
   }
   localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
   return index === -1;
+}
+
+function getSavedSortOrder() {
+  return localStorage.getItem(SORT_ORDER_KEY) || 'alpha';
+}
+
+function saveSortOrder(order) {
+  localStorage.setItem(SORT_ORDER_KEY, order);
 }
 
 function getActiveQueues() {
@@ -1202,15 +1211,16 @@ function renderApp() {
 
   const typeLabel = ENTITY_TYPES.find(t => t.type === currentEntityType)?.label || 'items';
 
+  const savedSort = getSavedSortOrder();
   filtersContainer.style.display = 'flex';
   filtersContainer.innerHTML = `
     <input type="text" id="search" placeholder="Search ${typeLabel.toLowerCase()}..." />
     <select id="sortOrder">
-      <option value="alpha">A-Z</option>
-      <option value="wait-low">Wait: Low to High</option>
-      <option value="wait-high">Wait: High to Low</option>
-      <option value="ll-early">LL: Earliest First</option>
-      <option value="ll-late">LL: Latest First</option>
+      <option value="alpha" ${savedSort === 'alpha' ? 'selected' : ''}>A-Z</option>
+      <option value="wait-low" ${savedSort === 'wait-low' ? 'selected' : ''}>Wait: Low to High</option>
+      <option value="wait-high" ${savedSort === 'wait-high' ? 'selected' : ''}>Wait: High to Low</option>
+      <option value="ll-early" ${savedSort === 'll-early' ? 'selected' : ''}>LL: Earliest First</option>
+      <option value="ll-late" ${savedSort === 'll-late' ? 'selected' : ''}>LL: Latest First</option>
     </select>
   `;
 
@@ -1313,7 +1323,10 @@ function renderApp() {
   }
 
   searchInput.addEventListener('input', renderItems);
-  sortOrder.addEventListener('change', renderItems);
+  sortOrder.addEventListener('change', () => {
+    saveSortOrder(sortOrder.value);
+    renderItems();
+  });
   renderItems();
 }
 
