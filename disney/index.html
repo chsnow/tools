@@ -801,12 +801,64 @@ const FAVORITES_KEY = 'disneyFavorites';
 const SORT_ORDER_KEY = 'disneySortOrder';
 const SHARE_PARAM = 'history';
 
-// URL-safe base64 encoding/decoding
-function encodeHistoryToUrl(history) {
+// URL-safe base64 encoding/decoding with compression
+async function compressData(data) {
+  const stream = new Blob([data]).stream();
+  const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
+  const chunks = [];
+  const reader = compressedStream.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  return new Uint8Array(await new Blob(chunks).arrayBuffer());
+}
+
+async function decompressData(compressed) {
+  const stream = new Blob([compressed]).stream();
+  const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'));
+  const chunks = [];
+  const reader = decompressedStream.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  return await new Blob(chunks).text();
+}
+
+function uint8ToBase64(bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function base64ToUint8(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function encodeHistoryToUrl(history) {
   try {
-    const json = JSON.stringify(history);
-    const base64 = btoa(unescape(encodeURIComponent(json)));
-    // Make URL-safe: replace + with -, / with _, remove padding =
+    // Minimize: short keys, only essential fields
+    const minimal = history.map(h => ({
+      i: h.id,
+      n: h.name,
+      p: h.parkName,
+      t: h.timestamp,
+      w: h.actualWaitMins
+    }));
+    const json = JSON.stringify(minimal);
+    const compressed = await compressData(json);
+    const base64 = uint8ToBase64(compressed);
+    // Make URL-safe
     return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   } catch (e) {
     console.error('Failed to encode history:', e);
@@ -814,38 +866,40 @@ function encodeHistoryToUrl(history) {
   }
 }
 
-function decodeHistoryFromUrl(encoded) {
+async function decodeHistoryFromUrl(encoded) {
   try {
-    // Restore from URL-safe: replace - with +, _ with /
     let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
-    // Add padding if needed
-    while (base64.length % 4) {
-      base64 += '=';
-    }
-    const json = decodeURIComponent(escape(atob(base64)));
-    const history = JSON.parse(json);
-    // Validate structure
-    if (!Array.isArray(history)) return null;
-    return history.filter(item =>
-      item && typeof item.id === 'string' &&
-      typeof item.name === 'string' &&
-      typeof item.timestamp === 'string'
-    );
+    while (base64.length % 4) base64 += '=';
+    const compressed = base64ToUint8(base64);
+    const json = await decompressData(compressed);
+    const minimal = JSON.parse(json);
+    if (!Array.isArray(minimal)) return null;
+    return minimal.filter(item =>
+      item && typeof item.i === 'string' &&
+      typeof item.n === 'string' &&
+      typeof item.t === 'string'
+    ).map(item => ({
+      id: item.i,
+      name: item.n,
+      parkName: item.p || 'Unknown park',
+      timestamp: item.t,
+      actualWaitMins: item.w ?? null
+    }));
   } catch (e) {
     console.error('Failed to decode history:', e);
     return null;
   }
 }
 
-function getSharedHistoryFromUrl() {
+async function getSharedHistoryFromUrl() {
   const params = new URLSearchParams(window.location.search);
   const encoded = params.get(SHARE_PARAM);
   if (!encoded) return null;
-  return decodeHistoryFromUrl(encoded);
+  return await decodeHistoryFromUrl(encoded);
 }
 
-function createShareUrl(history) {
-  const encoded = encodeHistoryToUrl(history);
+async function createShareUrl(history) {
+  const encoded = await encodeHistoryToUrl(history);
   if (!encoded) return null;
   const url = new URL(window.location.href);
   url.search = '';
@@ -1333,7 +1387,7 @@ async function shareHistory() {
     return;
   }
 
-  const shareUrl = createShareUrl(history);
+  const shareUrl = await createShareUrl(history);
   if (!shareUrl) {
     showToast('Failed to create share link');
     return;
@@ -1735,8 +1789,8 @@ function mergeHistory(sharedHistory) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
 }
 
-function checkForSharedHistory() {
-  const sharedHistory = getSharedHistoryFromUrl();
+async function checkForSharedHistory() {
+  const sharedHistory = await getSharedHistoryFromUrl();
   if (sharedHistory && sharedHistory.length > 0) {
     // Small delay to let the app render first
     setTimeout(() => showImportModal(sharedHistory), 500);
