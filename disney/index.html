@@ -382,6 +382,11 @@ body {
   font-weight: bold;
 }
 
+.ll-sold-out {
+  color: #ff6b6b;
+  font-weight: bold;
+}
+
 .showtimes {
   margin-top: 10px;
 }
@@ -1115,6 +1120,7 @@ function renderApp() {
       status: live.status || 'UNKNOWN',
       waitTime: live.queue?.STANDBY?.waitTime ?? null,
       returnStart: live.queue?.RETURN_TIME?.returnStart ?? null,
+      hasLightningLane: !!live.queue?.RETURN_TIME,
       showtimes: live.showtimes || []
     };
   });
@@ -1198,7 +1204,7 @@ function renderApp() {
             </div>
             <div class="status-row">
               ${item.waitTime !== null ? `<span class="wait-time">${item.waitTime} <span>min</span></span>` : ''}
-              ${item.returnStart ? `<span class="ll-time">LL ${formatReturnTime(item.returnStart)}</span>` : ''}
+              ${item.returnStart ? `<span class="ll-time">LL ${formatReturnTime(item.returnStart)}</span>` : (item.hasLightningLane ? `<span class="ll-sold-out">LL SOLD OUT</span>` : '')}
               <span class="ride-status ${getStatusClass(item.status)}">${formatStatus(item.status)}</span>
             </div>
             ${inQueue ? `
