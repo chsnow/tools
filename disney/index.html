@@ -456,6 +456,152 @@ body {
   background: #c62828;
 }
 
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.history-title {
+  font-size: 1.1rem;
+  color: #aaa;
+}
+
+.share-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.share-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.share-btn:active {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal {
+  background: #252542;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 400px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-title {
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin-bottom: 12px;
+}
+
+.modal-text {
+  color: #aaa;
+  margin-bottom: 16px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.modal-preview {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.modal-preview-item {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.9rem;
+}
+
+.modal-preview-item:last-child {
+  border-bottom: none;
+}
+
+.modal-preview-name {
+  font-weight: bold;
+}
+
+.modal-preview-meta {
+  color: #888;
+  font-size: 0.8rem;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.modal-btn {
+  flex: 1;
+  min-width: 100px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 8px;
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.modal-btn-primary {
+  background: #4caf50;
+  color: #fff;
+}
+
+.modal-btn-primary:hover {
+  background: #43a047;
+}
+
+.modal-btn-secondary {
+  background: #2196f3;
+  color: #fff;
+}
+
+.modal-btn-secondary:hover {
+  background: #1e88e5;
+}
+
+.modal-btn-cancel {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.modal-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
 .history-item {
   position: relative;
   background: #252542;
@@ -653,6 +799,65 @@ const STORAGE_KEY = 'disneyRideHistory';
 const QUEUE_KEY = 'disneyActiveQueues';
 const FAVORITES_KEY = 'disneyFavorites';
 const SORT_ORDER_KEY = 'disneySortOrder';
+const SHARE_PARAM = 'history';
+
+// URL-safe base64 encoding/decoding
+function encodeHistoryToUrl(history) {
+  try {
+    const json = JSON.stringify(history);
+    const base64 = btoa(unescape(encodeURIComponent(json)));
+    // Make URL-safe: replace + with -, / with _, remove padding =
+    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  } catch (e) {
+    console.error('Failed to encode history:', e);
+    return null;
+  }
+}
+
+function decodeHistoryFromUrl(encoded) {
+  try {
+    // Restore from URL-safe: replace - with +, _ with /
+    let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    // Add padding if needed
+    while (base64.length % 4) {
+      base64 += '=';
+    }
+    const json = decodeURIComponent(escape(atob(base64)));
+    const history = JSON.parse(json);
+    // Validate structure
+    if (!Array.isArray(history)) return null;
+    return history.filter(item =>
+      item && typeof item.id === 'string' &&
+      typeof item.name === 'string' &&
+      typeof item.timestamp === 'string'
+    );
+  } catch (e) {
+    console.error('Failed to decode history:', e);
+    return null;
+  }
+}
+
+function getSharedHistoryFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const encoded = params.get(SHARE_PARAM);
+  if (!encoded) return null;
+  return decodeHistoryFromUrl(encoded);
+}
+
+function createShareUrl(history) {
+  const encoded = encodeHistoryToUrl(history);
+  if (!encoded) return null;
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.searchParams.set(SHARE_PARAM, encoded);
+  return url.toString();
+}
+
+function clearShareParam() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete(SHARE_PARAM);
+  window.history.replaceState({}, '', url.toString());
+}
 
 function getFavorites() {
   try {
@@ -1091,6 +1296,12 @@ function renderHistory() {
   };
 
   content.innerHTML = `
+    <div class="history-header">
+      <span class="history-title">${history.length} ride${history.length !== 1 ? 's' : ''} logged</span>
+      <button class="share-btn" id="shareHistoryBtn">
+        <span>Share</span>
+      </button>
+    </div>
     <div class="history-list">
       ${history.map((item, index) => `
         <div class="history-wrapper" data-index="${index}">
@@ -1111,6 +1322,68 @@ function renderHistory() {
   `;
 
   setupHistorySwipeHandlers();
+
+  document.getElementById('shareHistoryBtn').addEventListener('click', shareHistory);
+}
+
+async function shareHistory() {
+  const history = getRideHistory();
+  if (history.length === 0) {
+    showToast('No history to share');
+    return;
+  }
+
+  const shareUrl = createShareUrl(history);
+  if (!shareUrl) {
+    showToast('Failed to create share link');
+    return;
+  }
+
+  // Try native share API first (mobile)
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: 'My Disneyland Ride History',
+        text: `Check out my ${history.length} ride${history.length !== 1 ? 's' : ''} at Disneyland!`,
+        url: shareUrl
+      });
+      return;
+    } catch (e) {
+      // User cancelled or share failed, fall back to clipboard
+      if (e.name === 'AbortError') return;
+    }
+  }
+
+  // Fall back to clipboard
+  try {
+    await navigator.clipboard.writeText(shareUrl);
+    showToast('Link copied to clipboard!');
+  } catch (e) {
+    // Final fallback: show modal with URL
+    showShareModal(shareUrl);
+  }
+}
+
+function showShareModal(url) {
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-title">Share Link</div>
+      <div class="modal-text">Copy this link to share your ride history:</div>
+      <input type="text" value="${url}" readonly style="width: 100%; padding: 10px; font-size: 14px; margin-bottom: 16px; border-radius: 6px; border: none; background: rgba(0,0,0,0.3); color: #fff;" onclick="this.select()">
+      <div class="modal-buttons">
+        <button class="modal-btn modal-btn-cancel" id="closeShareModal">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal || e.target.id === 'closeShareModal') {
+      modal.remove();
+    }
+  });
 }
 
 function getParkLabel(name) {
@@ -1363,6 +1636,114 @@ async function loadPark(parkId) {
   }
 }
 
+function showImportModal(sharedHistory) {
+  const formatDate = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const formatTime = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  };
+
+  const existingHistory = getRideHistory();
+  const hasExisting = existingHistory.length > 0;
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-title">Import Shared History</div>
+      <div class="modal-text">
+        Someone shared ${sharedHistory.length} ride${sharedHistory.length !== 1 ? 's' : ''} with you.
+        ${hasExisting ? `You currently have ${existingHistory.length} ride${existingHistory.length !== 1 ? 's' : ''} in your history.` : ''}
+      </div>
+      <div class="modal-preview">
+        ${sharedHistory.slice(0, 10).map(item => `
+          <div class="modal-preview-item">
+            <div class="modal-preview-name">${item.name}</div>
+            <div class="modal-preview-meta">${item.parkName || 'Unknown park'} - ${formatDate(item.timestamp)} ${formatTime(item.timestamp)}</div>
+          </div>
+        `).join('')}
+        ${sharedHistory.length > 10 ? `<div class="modal-preview-item" style="color: #888; text-align: center;">...and ${sharedHistory.length - 10} more</div>` : ''}
+      </div>
+      <div class="modal-buttons">
+        ${hasExisting ? `
+          <button class="modal-btn modal-btn-secondary" id="mergeHistoryBtn">Merge</button>
+          <button class="modal-btn modal-btn-primary" id="replaceHistoryBtn">Replace</button>
+        ` : `
+          <button class="modal-btn modal-btn-primary" id="replaceHistoryBtn">Add to History</button>
+        `}
+        <button class="modal-btn modal-btn-cancel" id="cancelImportBtn">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const mergeBtn = document.getElementById('mergeHistoryBtn');
+  const replaceBtn = document.getElementById('replaceHistoryBtn');
+  const cancelBtn = document.getElementById('cancelImportBtn');
+
+  if (mergeBtn) {
+    mergeBtn.addEventListener('click', () => {
+      mergeHistory(sharedHistory);
+      modal.remove();
+      clearShareParam();
+      showToast('History merged!');
+      if (currentEntityType === 'HISTORY') {
+        renderHistory();
+      }
+    });
+  }
+
+  replaceBtn.addEventListener('click', () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sharedHistory));
+    modal.remove();
+    clearShareParam();
+    showToast('History imported!');
+    if (currentEntityType === 'HISTORY') {
+      renderHistory();
+    }
+  });
+
+  cancelBtn.addEventListener('click', () => {
+    modal.remove();
+    clearShareParam();
+  });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.remove();
+      clearShareParam();
+    }
+  });
+}
+
+function mergeHistory(sharedHistory) {
+  const existing = getRideHistory();
+  // Create a Set of existing timestamps to detect duplicates
+  const existingKeys = new Set(existing.map(item => `${item.id}-${item.timestamp}`));
+
+  // Add shared items that aren't duplicates
+  const newItems = sharedHistory.filter(item => !existingKeys.has(`${item.id}-${item.timestamp}`));
+
+  // Merge and sort by timestamp (newest first)
+  const merged = [...existing, ...newItems].sort((a, b) =>
+    new Date(b.timestamp) - new Date(a.timestamp)
+  );
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+}
+
+function checkForSharedHistory() {
+  const sharedHistory = getSharedHistoryFromUrl();
+  if (sharedHistory && sharedHistory.length > 0) {
+    // Small delay to let the app render first
+    setTimeout(() => showImportModal(sharedHistory), 500);
+  }
+}
+
 async function init() {
   try {
     const destinations = await fetchDestinations();
@@ -1385,6 +1766,9 @@ async function init() {
 
     currentParkId = parks[0].id;
     loadPark(currentParkId);
+
+    // Check for shared history after app loads
+    checkForSharedHistory();
   } catch (error) {
     console.error(error);
     showError(`Error loading parks: ${error.message}`);
