@@ -533,9 +533,84 @@ footer a {
   font-size: 0.75rem;
   color: #555;
 }
+
+.pull-to-refresh {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 0;
+  overflow: hidden;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  z-index: 200;
+  transition: height 0.2s ease;
+}
+
+.pull-to-refresh.pulling {
+  transition: none;
+}
+
+.pull-to-refresh.refreshing {
+  height: 60px;
+}
+
+.pull-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.pull-to-refresh.visible .pull-indicator {
+  opacity: 1;
+}
+
+.pull-arrow {
+  font-size: 1.2rem;
+  transition: transform 0.2s;
+}
+
+.pull-to-refresh.ready .pull-arrow {
+  transform: rotate(180deg);
+}
+
+.pull-to-refresh.refreshing .pull-arrow {
+  display: none;
+}
+
+.pull-text {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.pull-spinner {
+  display: none;
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+}
+
+.pull-to-refresh.refreshing .pull-spinner {
+  display: block;
+}
   </style>
 </head>
 <body>
+  <div class="pull-to-refresh" id="pullToRefresh">
+    <div class="pull-indicator">
+      <span class="pull-arrow">↓</span>
+      <span class="pull-spinner"></span>
+      <span class="pull-text">Pull to refresh</span>
+    </div>
+  </div>
   <div class="container">
     <div class="sticky-header">
       <div class="park-toggle" id="parkToggle"></div>
@@ -1304,6 +1379,115 @@ async function init() {
 }
 
 init();
+
+// Pull-to-refresh implementation for PWA
+const pullToRefresh = document.getElementById('pullToRefresh');
+const pullText = pullToRefresh.querySelector('.pull-text');
+let pullStartY = 0;
+let isPulling = false;
+let isRefreshing = false;
+const PULL_THRESHOLD = 80;
+
+async function refreshData() {
+  if (isRefreshing) return;
+  isRefreshing = true;
+
+  pullToRefresh.classList.remove('pulling', 'ready', 'visible');
+  pullToRefresh.classList.add('refreshing');
+  pullText.textContent = 'Refreshing...';
+
+  try {
+    if (currentEntityType === 'HISTORY') {
+      // History doesn't need refresh from API
+      renderHistory();
+    } else if (currentParkId) {
+      const [childrenData, liveData] = await Promise.all([
+        fetchChildren(currentParkId),
+        fetchLiveData(currentParkId)
+      ]);
+
+      allEntities = childrenData.children;
+
+      liveDataMap = new Map();
+      if (liveData.liveData) {
+        liveData.liveData.forEach(item => {
+          liveDataMap.set(item.id, item);
+        });
+      }
+
+      renderApp();
+    }
+    showToast('Data refreshed');
+  } catch (error) {
+    console.error('Refresh failed:', error);
+    showToast('Refresh failed');
+  }
+
+  pullToRefresh.classList.remove('refreshing');
+  pullToRefresh.style.height = '';
+  pullText.textContent = 'Pull to refresh';
+  isRefreshing = false;
+}
+
+function handlePullStart(e) {
+  if (isRefreshing) return;
+  if (window.scrollY > 0) return;
+
+  const touch = e.touches ? e.touches[0] : e;
+  pullStartY = touch.clientY;
+  isPulling = true;
+  pullToRefresh.classList.add('pulling');
+}
+
+function handlePullMove(e) {
+  if (!isPulling || isRefreshing) return;
+  if (window.scrollY > 0) {
+    isPulling = false;
+    pullToRefresh.classList.remove('pulling', 'visible', 'ready');
+    pullToRefresh.style.height = '';
+    return;
+  }
+
+  const touch = e.touches ? e.touches[0] : e;
+  const pullDistance = Math.max(0, touch.clientY - pullStartY);
+
+  if (pullDistance > 0) {
+    e.preventDefault();
+    const height = Math.min(pullDistance * 0.5, 100);
+    pullToRefresh.style.height = height + 'px';
+
+    if (height > 10) {
+      pullToRefresh.classList.add('visible');
+    }
+
+    if (pullDistance > PULL_THRESHOLD) {
+      pullToRefresh.classList.add('ready');
+      pullText.textContent = 'Release to refresh';
+    } else {
+      pullToRefresh.classList.remove('ready');
+      pullText.textContent = 'Pull to refresh';
+    }
+  }
+}
+
+function handlePullEnd() {
+  if (!isPulling || isRefreshing) return;
+  isPulling = false;
+  pullToRefresh.classList.remove('pulling');
+
+  const height = parseInt(pullToRefresh.style.height) || 0;
+  if (height > PULL_THRESHOLD * 0.5) {
+    refreshData();
+  } else {
+    pullToRefresh.classList.remove('visible', 'ready');
+    pullToRefresh.style.height = '';
+    pullText.textContent = 'Pull to refresh';
+  }
+}
+
+document.addEventListener('touchstart', handlePullStart, { passive: true });
+document.addEventListener('touchmove', handlePullMove, { passive: false });
+document.addEventListener('touchend', handlePullEnd);
 
 // Register service worker
 if ('serviceWorker' in navigator) {
