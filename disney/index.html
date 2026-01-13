@@ -1095,7 +1095,9 @@ function initGeolocation() {
           longitude: position.coords.longitude
         };
         // Re-render if we're viewing a list that could show distances
-        if (currentEntityType !== 'HISTORY') {
+        // But skip if a note editor is open to avoid closing it
+        const hasOpenEditor = document.querySelector('.note-editor[style*="display: flex"]');
+        if (currentEntityType !== 'HISTORY' && !hasOpenEditor) {
           renderApp();
         }
       },
