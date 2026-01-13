@@ -86,6 +86,34 @@ body {
   color: #1a1a2e;
 }
 
+.header-share-btn {
+  position: absolute;
+  left: 0;
+  background: none;
+  border: 1.5px solid rgba(255,255,255,0.4);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.6);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.header-share-btn:hover {
+  border-color: rgba(255,255,255,0.7);
+  color: rgba(255,255,255,0.9);
+}
+
+.header-share-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
 .park-btn {
   padding: 8px 16px;
   border: 2px solid rgba(255,255,255,0.3);
@@ -1041,7 +1069,7 @@ footer a {
 
     <footer>
       Data provided by <a href="https://themeparks.wiki" target="_blank">ThemeParks.wiki</a>
-      <div class="version">Version: 2026-01-13 distance</div>
+      <div class="version">Version: 2026-01-13 note-sharing</div>
     </footer>
   </div>
 
@@ -1151,6 +1179,7 @@ const SORT_ORDER_KEY = 'disneySortOrder';
 const NOTES_KEY = 'disneyNotes';
 const HISTORY_COLLAPSED_KEY = 'disneyHistoryCollapsed';
 const SHARE_PARAM = 'history';
+const NOTES_SHARE_PARAM = 'notes';
 
 // URL-safe base64 encoding/decoding with compression
 async function compressData(data) {
@@ -1265,7 +1294,61 @@ async function createShareUrl(history) {
 function clearShareParam() {
   const url = new URL(window.location.href);
   url.searchParams.delete(SHARE_PARAM);
+  url.searchParams.delete(NOTES_SHARE_PARAM);
   window.history.replaceState({}, '', url.toString());
+}
+
+// Notes sharing - similar pattern to history
+async function encodeNotesToUrl(notes) {
+  try {
+    // Convert notes object to array format for more efficient encoding
+    const notesArray = Object.entries(notes).map(([id, text]) => ({ i: id, t: text }));
+    const json = JSON.stringify(notesArray);
+    const compressed = await compressData(json);
+    const base64 = uint8ToBase64(compressed);
+    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  } catch (e) {
+    console.error('Failed to encode notes:', e);
+    return null;
+  }
+}
+
+async function decodeNotesFromUrl(encoded) {
+  try {
+    let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4) base64 += '=';
+    const compressed = base64ToUint8(base64);
+    const json = await decompressData(compressed);
+    const notesArray = JSON.parse(json);
+    if (!Array.isArray(notesArray)) return null;
+    // Convert back to object format
+    const notes = {};
+    notesArray.forEach(item => {
+      if (item && typeof item.i === 'string' && typeof item.t === 'string') {
+        notes[item.i] = item.t;
+      }
+    });
+    return notes;
+  } catch (e) {
+    console.error('Failed to decode notes:', e);
+    return null;
+  }
+}
+
+async function getSharedNotesFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const encoded = params.get(NOTES_SHARE_PARAM);
+  if (!encoded) return null;
+  return await decodeNotesFromUrl(encoded);
+}
+
+async function createNotesShareUrl(notes) {
+  const encoded = await encodeNotesToUrl(notes);
+  if (!encoded) return null;
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.searchParams.set(NOTES_SHARE_PARAM, encoded);
+  return url.toString();
 }
 
 function getFavorites() {
@@ -2064,13 +2147,14 @@ async function shareHistory() {
   }
 }
 
-function showShareModal(url) {
+function showShareModal(url, type = 'history') {
+  const typeLabel = type === 'notes' ? 'notes' : 'ride history';
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
   modal.innerHTML = `
     <div class="modal">
       <div class="modal-title">Share Link</div>
-      <div class="modal-text">Copy this link to share your ride history:</div>
+      <div class="modal-text">Copy this link to share your ${typeLabel}:</div>
       <input type="text" value="${url}" readonly style="width: 100%; padding: 10px; font-size: 14px; margin-bottom: 16px; border-radius: 6px; border: none; background: rgba(0,0,0,0.3); color: #fff;" onclick="this.select()">
       <div class="modal-buttons">
         <button class="modal-btn modal-btn-cancel" id="closeShareModal">Close</button>
@@ -2086,6 +2170,214 @@ function showShareModal(url) {
   });
 }
 
+function showShareTypeModal() {
+  const notes = getNotes();
+  const history = getRideHistory();
+  const notesCount = Object.keys(notes).length;
+  const historyCount = history.length;
+
+  if (notesCount === 0 && historyCount === 0) {
+    showToast('Nothing to share yet');
+    return;
+  }
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-title">What would you like to share?</div>
+      <div class="modal-text">Choose what to share with others:</div>
+      <div class="modal-buttons" style="flex-direction: column;">
+        <button class="modal-btn modal-btn-primary" id="shareNotesBtn" ${notesCount === 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+          Notes (${notesCount} item${notesCount !== 1 ? 's' : ''})
+        </button>
+        <button class="modal-btn modal-btn-secondary" id="shareHistoryModalBtn" ${historyCount === 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+          History (${historyCount} ride${historyCount !== 1 ? 's' : ''})
+        </button>
+        <button class="modal-btn modal-btn-cancel" id="cancelShareTypeBtn">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  if (notesCount > 0) {
+    document.getElementById('shareNotesBtn').addEventListener('click', () => {
+      modal.remove();
+      shareNotes();
+    });
+  }
+
+  if (historyCount > 0) {
+    document.getElementById('shareHistoryModalBtn').addEventListener('click', () => {
+      modal.remove();
+      shareHistory();
+    });
+  }
+
+  document.getElementById('cancelShareTypeBtn').addEventListener('click', () => {
+    modal.remove();
+  });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.remove();
+    }
+  });
+}
+
+async function shareNotes() {
+  const notes = getNotes();
+  const notesCount = Object.keys(notes).length;
+
+  if (notesCount === 0) {
+    showToast('No notes to share');
+    return;
+  }
+
+  const shareUrl = await createNotesShareUrl(notes);
+  if (!shareUrl) {
+    showToast('Failed to create share link');
+    return;
+  }
+
+  // Try native share API first (mobile)
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: 'My Disneyland Notes',
+        text: `Check out my ${notesCount} note${notesCount !== 1 ? 's' : ''} for Disneyland!\n${shareUrl}`
+      });
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+    }
+  }
+
+  // Fall back to clipboard
+  try {
+    await navigator.clipboard.writeText(shareUrl);
+    showToast('Link copied to clipboard!');
+  } catch (e) {
+    showShareModal(shareUrl, 'notes');
+  }
+}
+
+function showNotesImportModal(sharedNotes, entityNames) {
+  const existingNotes = getNotes();
+  const sharedIds = Object.keys(sharedNotes);
+  const existingIds = Object.keys(existingNotes);
+  const hasExisting = existingIds.length > 0;
+
+  // Find conflicts (items that exist in both)
+  const conflictIds = sharedIds.filter(id => existingIds.includes(id) && existingNotes[id] !== sharedNotes[id]);
+  const newIds = sharedIds.filter(id => !existingIds.includes(id));
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-title">Import Shared Notes</div>
+      <div class="modal-text">
+        Someone shared ${sharedIds.length} note${sharedIds.length !== 1 ? 's' : ''} with you.
+        ${hasExisting ? `You currently have ${existingIds.length} note${existingIds.length !== 1 ? 's' : ''}.` : ''}
+        ${conflictIds.length > 0 ? `<br><br><strong>${conflictIds.length} item${conflictIds.length !== 1 ? 's have' : ' has'} different notes</strong> - you can choose how to handle conflicts.` : ''}
+      </div>
+      <div class="modal-preview">
+        ${sharedIds.slice(0, 10).map(id => {
+          const name = entityNames[id] || id;
+          const hasConflict = conflictIds.includes(id);
+          return `
+            <div class="modal-preview-item">
+              <div class="modal-preview-name">${escapeHtml(name)}${hasConflict ? ' <span style="background:#ff9800;color:#fff;font-size:0.65rem;padding:1px 4px;border-radius:3px;">CONFLICT</span>' : ''}</div>
+              <div class="modal-preview-meta" style="white-space: pre-wrap;">${escapeHtml(sharedNotes[id].substring(0, 100))}${sharedNotes[id].length > 100 ? '...' : ''}</div>
+            </div>
+          `;
+        }).join('')}
+        ${sharedIds.length > 10 ? `<div class="modal-preview-item" style="color: #888; text-align: center;">...and ${sharedIds.length - 10} more</div>` : ''}
+      </div>
+      <div class="modal-buttons" style="flex-direction: column; gap: 8px;">
+        ${conflictIds.length > 0 ? `
+          <button class="modal-btn modal-btn-primary" id="mergeKeepMineBtn">Merge (keep my notes for conflicts)</button>
+          <button class="modal-btn modal-btn-secondary" id="mergeUseSharedBtn">Merge (use shared notes for conflicts)</button>
+        ` : `
+          <button class="modal-btn modal-btn-primary" id="mergeNotesBtn">Add to My Notes</button>
+        `}
+        ${hasExisting ? `<button class="modal-btn modal-btn-cancel" id="replaceNotesBtn" style="background: #f44336;">Replace All My Notes</button>` : ''}
+        <button class="modal-btn modal-btn-cancel" id="cancelNotesImportBtn">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  if (conflictIds.length > 0) {
+    document.getElementById('mergeKeepMineBtn').addEventListener('click', () => {
+      mergeNotes(sharedNotes, 'keep-mine');
+      modal.remove();
+      clearShareParam();
+      showToast('Notes merged (kept your versions)!');
+      renderApp();
+    });
+
+    document.getElementById('mergeUseSharedBtn').addEventListener('click', () => {
+      mergeNotes(sharedNotes, 'use-shared');
+      modal.remove();
+      clearShareParam();
+      showToast('Notes merged (used shared versions)!');
+      renderApp();
+    });
+  } else {
+    document.getElementById('mergeNotesBtn').addEventListener('click', () => {
+      mergeNotes(sharedNotes, 'keep-mine');
+      modal.remove();
+      clearShareParam();
+      showToast('Notes added!');
+      renderApp();
+    });
+  }
+
+  if (hasExisting) {
+    document.getElementById('replaceNotesBtn').addEventListener('click', () => {
+      localStorage.setItem(NOTES_KEY, JSON.stringify(sharedNotes));
+      modal.remove();
+      clearShareParam();
+      showToast('Notes replaced!');
+      renderApp();
+    });
+  }
+
+  document.getElementById('cancelNotesImportBtn').addEventListener('click', () => {
+    modal.remove();
+    clearShareParam();
+  });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.remove();
+      clearShareParam();
+    }
+  });
+}
+
+function mergeNotes(sharedNotes, conflictStrategy) {
+  const existing = getNotes();
+  const merged = { ...existing };
+
+  Object.entries(sharedNotes).forEach(([id, text]) => {
+    if (!(id in existing)) {
+      // New note, just add it
+      merged[id] = text;
+    } else if (existing[id] !== text) {
+      // Conflict - use strategy
+      if (conflictStrategy === 'use-shared') {
+        merged[id] = text;
+      }
+      // 'keep-mine' means we do nothing (keep existing)
+    }
+  });
+
+  localStorage.setItem(NOTES_KEY, JSON.stringify(merged));
+}
+
 function getParkLabel(name) {
   if (name.includes('California Adventure')) return 'DCA';
   if (name.includes('Disneyland')) return 'DLR';
@@ -2095,6 +2387,11 @@ function getParkLabel(name) {
 function renderParkToggle() {
   const toggle = document.getElementById('parkToggle');
   toggle.innerHTML = `
+    <button class="header-share-btn" title="Share">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
+      </svg>
+    </button>
     ${parks.map(park => `
       <button class="park-btn ${park.id === currentParkId ? 'active' : ''}" data-park-id="${park.id}">
         ${getParkLabel(park.name)}
@@ -2118,6 +2415,8 @@ function renderParkToggle() {
     renderParkToggle();
     renderApp();
   });
+
+  toggle.querySelector('.header-share-btn').addEventListener('click', showShareTypeModal);
 }
 
 function renderEntityTabs() {
@@ -2513,11 +2812,24 @@ function mergeHistory(sharedHistory) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
 }
 
-async function checkForSharedHistory() {
+async function checkForSharedData() {
+  // Check for shared history
   const sharedHistory = await getSharedHistoryFromUrl();
   if (sharedHistory && sharedHistory.length > 0) {
     // Small delay to let the app render first
     setTimeout(() => showImportModal(sharedHistory), 500);
+    return; // Only show one import modal at a time
+  }
+
+  // Check for shared notes
+  const sharedNotes = await getSharedNotesFromUrl();
+  if (sharedNotes && Object.keys(sharedNotes).length > 0) {
+    // Build entity name map from allEntities
+    const entityNames = {};
+    allEntities.forEach(entity => {
+      entityNames[entity.id] = entity.name;
+    });
+    setTimeout(() => showNotesImportModal(sharedNotes, entityNames), 500);
   }
 }
 
@@ -2547,8 +2859,8 @@ async function init() {
     currentParkId = parks[0].id;
     loadPark(currentParkId);
 
-    // Check for shared history after app loads
-    checkForSharedHistory();
+    // Check for shared data (history or notes) after app loads
+    checkForSharedData();
   } catch (error) {
     console.error(error);
     showError(`Error loading parks: ${error.message}`);
