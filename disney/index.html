@@ -766,6 +766,125 @@ body {
   font-weight: bold;
 }
 
+.history-day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #1e1e38;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+  margin-bottom: 4px;
+}
+
+.history-day-header:hover {
+  background: #262648;
+}
+
+.history-day-header.collapsed {
+  margin-bottom: 0;
+}
+
+.history-day-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.history-day-chevron {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+  transition: transform 0.2s;
+}
+
+.history-day-header.collapsed .history-day-chevron {
+  transform: rotate(-90deg);
+}
+
+.history-day-date {
+  font-weight: bold;
+  font-size: 1rem;
+}
+
+.history-day-summary {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.9rem;
+}
+
+.history-day-count {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.history-day-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 8px;
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+  margin-left: 8px;
+  margin-bottom: 12px;
+}
+
+.history-day-items.collapsed {
+  display: none;
+}
+
+.history-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.history-expand-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.history-expand-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.history-stats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.history-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.history-stat-value {
+  font-size: 1.4rem;
+  font-weight: bold;
+}
+
+.history-stat-label {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+}
+
 .logged-toast {
   position: fixed;
   bottom: 30px;
@@ -944,6 +1063,7 @@ const QUEUE_KEY = 'disneyActiveQueues';
 const FAVORITES_KEY = 'disneyFavorites';
 const SORT_ORDER_KEY = 'disneySortOrder';
 const NOTES_KEY = 'disneyNotes';
+const HISTORY_COLLAPSED_KEY = 'disneyHistoryCollapsed';
 const SHARE_PARAM = 'history';
 
 // URL-safe base64 encoding/decoding with compression
@@ -1114,6 +1234,30 @@ function saveNote(entityId, text) {
     delete notes[entityId];
   }
   localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+}
+
+function getHistoryCollapsedState() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_COLLAPSED_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function setDayCollapsed(dateKey, collapsed) {
+  const state = getHistoryCollapsedState();
+  state[dateKey] = collapsed;
+  localStorage.setItem(HISTORY_COLLAPSED_KEY, JSON.stringify(state));
+}
+
+function isDayCollapsed(dateKey, isToday) {
+  const state = getHistoryCollapsedState();
+  // If user has explicitly set state, use that
+  if (dateKey in state) {
+    return state[dateKey];
+  }
+  // Default: today expanded, previous days collapsed
+  return !isToday;
 }
 
 function escapeHtml(text) {
@@ -1609,7 +1753,7 @@ function renderHistory() {
     return;
   }
 
-  const formatDate = (iso) => {
+  const formatDateHeader = (iso) => {
     const d = new Date(iso);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
@@ -1619,24 +1763,65 @@ function renderHistory() {
     return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   };
 
-  content.innerHTML = `
-    <div class="history-header">
-      <span class="history-title">${history.length} ride${history.length !== 1 ? 's' : ''} logged</span>
-      <button class="share-btn" id="shareHistoryBtn">
-        <span>Share</span>
-      </button>
-    </div>
-    <div class="history-list">
-      ${history.map((item, index) => {
-        let waitInfo = '';
-        if (item.actualWaitMins !== null && item.expectedWaitMins !== null) {
-          waitInfo = ` • ${item.actualWaitMins} min (posted ${item.expectedWaitMins})`;
-        } else if (item.actualWaitMins !== null) {
-          waitInfo = ` • ${item.actualWaitMins} min wait`;
-        }
-        const llBadge = item.queueType === 'll' ? '<span class="history-ll-badge">LL</span>' : '';
-        return `
-        <div class="history-wrapper" data-index="${index}">
+  const getDateKey = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  };
+
+  const todayKey = getDateKey(new Date().toISOString());
+
+  // Group history by day
+  const dayGroups = new Map();
+  history.forEach((item, index) => {
+    const dateKey = getDateKey(item.timestamp);
+    if (!dayGroups.has(dateKey)) {
+      dayGroups.set(dateKey, { items: [], indices: [] });
+    }
+    dayGroups.get(dateKey).items.push(item);
+    dayGroups.get(dateKey).indices.push(index);
+  });
+
+  // Calculate overall stats
+  const totalRides = history.length;
+  const uniqueDays = dayGroups.size;
+  const dlrCount = history.filter(h => h.parkName && h.parkName.includes('Disneyland') && !h.parkName.includes('California Adventure')).length;
+  const dcaCount = history.filter(h => h.parkName && h.parkName.includes('California Adventure')).length;
+  const llCount = history.filter(h => h.queueType === 'll').length;
+  const withWaitTime = history.filter(h => h.actualWaitMins !== null);
+  const avgWait = withWaitTime.length > 0
+    ? Math.round(withWaitTime.reduce((sum, h) => sum + h.actualWaitMins, 0) / withWaitTime.length)
+    : null;
+
+  // Build HTML for day groups
+  const dayGroupsHtml = Array.from(dayGroups.entries()).map(([dateKey, group]) => {
+    const isToday = dateKey === todayKey;
+    const collapsed = isDayCollapsed(dateKey, isToday);
+    const dateDisplay = formatDateHeader(group.items[0].timestamp);
+
+    // Count parks for this day
+    const dayDlr = group.items.filter(h => h.parkName && h.parkName.includes('Disneyland') && !h.parkName.includes('California Adventure')).length;
+    const dayDca = group.items.filter(h => h.parkName && h.parkName.includes('California Adventure')).length;
+
+    let parkSummary = '';
+    if (dayDlr > 0 && dayDca > 0) {
+      parkSummary = `${dayDlr} DLR, ${dayDca} DCA`;
+    } else if (dayDlr > 0) {
+      parkSummary = `${dayDlr} DLR`;
+    } else if (dayDca > 0) {
+      parkSummary = `${dayDca} DCA`;
+    }
+
+    const itemsHtml = group.items.map((item, i) => {
+      const globalIndex = group.indices[i];
+      let waitInfo = '';
+      if (item.actualWaitMins !== null && item.expectedWaitMins !== null) {
+        waitInfo = ` • ${item.actualWaitMins} min (posted ${item.expectedWaitMins})`;
+      } else if (item.actualWaitMins !== null) {
+        waitInfo = ` • ${item.actualWaitMins} min wait`;
+      }
+      const llBadge = item.queueType === 'll' ? '<span class="history-ll-badge">LL</span>' : '';
+      return `
+        <div class="history-wrapper" data-index="${globalIndex}">
           <div class="history-delete-action">Remove</div>
           <div class="history-item">
             <div>
@@ -1644,16 +1829,114 @@ function renderHistory() {
               <div class="history-park">${item.parkName}${waitInfo}</div>
             </div>
             <div class="history-time">
-              <div class="history-date">${formatDate(item.timestamp)}</div>
               <div>${formatTime(item.timestamp)}</div>
             </div>
           </div>
         </div>
-      `}).join('')}
+      `;
+    }).join('');
+
+    return `
+      <div class="history-day-header ${collapsed ? 'collapsed' : ''}" data-date-key="${dateKey}" data-is-today="${isToday}">
+        <div class="history-day-left">
+          <span class="history-day-chevron">&#9660;</span>
+          <span class="history-day-date">${isToday ? 'Today' : dateDisplay}</span>
+          <span class="history-day-summary">${parkSummary}</span>
+        </div>
+        <span class="history-day-count">${group.items.length}</span>
+      </div>
+      <div class="history-day-items ${collapsed ? 'collapsed' : ''}" data-date-key="${dateKey}">
+        ${itemsHtml}
+      </div>
+    `;
+  }).join('');
+
+  content.innerHTML = `
+    <div class="history-header">
+      <span class="history-title">${history.length} ride${history.length !== 1 ? 's' : ''} logged</span>
+      <div class="history-controls">
+        <button class="history-expand-btn" id="expandAllBtn">Expand All</button>
+        <button class="history-expand-btn" id="collapseAllBtn">Collapse All</button>
+        <button class="share-btn" id="shareHistoryBtn">
+          <span>Share</span>
+        </button>
+      </div>
+    </div>
+    <div class="history-stats">
+      <div class="history-stat">
+        <span class="history-stat-value">${totalRides}</span>
+        <span class="history-stat-label">Total</span>
+      </div>
+      <div class="history-stat">
+        <span class="history-stat-value">${uniqueDays}</span>
+        <span class="history-stat-label">Days</span>
+      </div>
+      ${dlrCount > 0 ? `
+      <div class="history-stat">
+        <span class="history-stat-value">${dlrCount}</span>
+        <span class="history-stat-label">DLR</span>
+      </div>
+      ` : ''}
+      ${dcaCount > 0 ? `
+      <div class="history-stat">
+        <span class="history-stat-value">${dcaCount}</span>
+        <span class="history-stat-label">DCA</span>
+      </div>
+      ` : ''}
+      ${llCount > 0 ? `
+      <div class="history-stat">
+        <span class="history-stat-value">${llCount}</span>
+        <span class="history-stat-label">LL</span>
+      </div>
+      ` : ''}
+      ${avgWait !== null ? `
+      <div class="history-stat">
+        <span class="history-stat-value">${avgWait}</span>
+        <span class="history-stat-label">Avg Wait</span>
+      </div>
+      ` : ''}
+    </div>
+    <div class="history-list">
+      ${dayGroupsHtml}
     </div>
   `;
 
   setupHistorySwipeHandlers();
+
+  // Setup day header click handlers
+  document.querySelectorAll('.history-day-header').forEach(header => {
+    header.addEventListener('click', () => {
+      const dateKey = header.dataset.dateKey;
+      const itemsDiv = document.querySelector(`.history-day-items[data-date-key="${dateKey}"]`);
+      const isNowCollapsed = !header.classList.contains('collapsed');
+
+      header.classList.toggle('collapsed', isNowCollapsed);
+      itemsDiv.classList.toggle('collapsed', isNowCollapsed);
+      setDayCollapsed(dateKey, isNowCollapsed);
+    });
+  });
+
+  // Expand All button
+  document.getElementById('expandAllBtn').addEventListener('click', () => {
+    document.querySelectorAll('.history-day-header').forEach(header => {
+      const dateKey = header.dataset.dateKey;
+      const itemsDiv = document.querySelector(`.history-day-items[data-date-key="${dateKey}"]`);
+      header.classList.remove('collapsed');
+      itemsDiv.classList.remove('collapsed');
+      setDayCollapsed(dateKey, false);
+    });
+  });
+
+  // Collapse All button
+  document.getElementById('collapseAllBtn').addEventListener('click', () => {
+    document.querySelectorAll('.history-day-header').forEach(header => {
+      const dateKey = header.dataset.dateKey;
+      const itemsDiv = document.querySelector(`.history-day-items[data-date-key="${dateKey}"]`);
+      header.classList.add('collapsed');
+      itemsDiv.classList.add('collapsed');
+      setDayCollapsed(dateKey, true);
+    });
+  });
 
   document.getElementById('shareHistoryBtn').addEventListener('click', shareHistory);
 }
