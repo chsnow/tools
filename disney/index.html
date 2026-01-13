@@ -492,6 +492,11 @@ body {
   font-weight: bold;
 }
 
+.distance {
+  color: #aaa;
+  font-size: 0.85rem;
+}
+
 .showtimes {
   margin-top: 10px;
 }
@@ -1036,7 +1041,7 @@ footer a {
 
     <footer>
       Data provided by <a href="https://themeparks.wiki" target="_blank">ThemeParks.wiki</a>
-      <div class="version">Version: 2026-01-13 notes</div>
+      <div class="version">Version: 2026-01-13 distance</div>
     </footer>
   </div>
 
@@ -1050,6 +1055,87 @@ let currentEntityType = 'ATTRACTION';
 let allEntities = [];
 let liveDataMap = new Map();
 let showFavoritesOnly = false;
+let userLocation = null;
+
+// Geolocation support
+function initGeolocation() {
+  if ('geolocation' in navigator) {
+    navigator.geolocation.watchPosition(
+      (position) => {
+        userLocation = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        };
+        // Re-render if we're viewing a list that could show distances
+        if (currentEntityType !== 'HISTORY') {
+          renderApp();
+        }
+      },
+      (error) => {
+        console.log('Geolocation error:', error.message);
+        userLocation = null;
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 30000,
+        timeout: 10000
+      }
+    );
+  }
+}
+
+// Haversine formula to calculate distance between two coordinates
+function getDistanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000; // Earth's radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Convert meters to feet
+function metersToFeet(meters) {
+  return meters * 3.28084;
+}
+
+// Format distance for display
+function formatDistance(entity) {
+  if (!userLocation) return null;
+  if (!entity.location?.latitude || !entity.location?.longitude) return null;
+
+  const distanceMeters = getDistanceMeters(
+    userLocation.latitude,
+    userLocation.longitude,
+    entity.location.latitude,
+    entity.location.longitude
+  );
+
+  const distanceFeet = metersToFeet(distanceMeters);
+  const oneMileInFeet = 5280;
+
+  if (distanceFeet > oneMileInFeet) {
+    return '> 1 mile';
+  }
+
+  return `${Math.round(distanceFeet).toLocaleString()} ft`;
+}
+
+// Get raw distance in feet for sorting (returns Infinity if no location)
+function getDistanceFeet(entity) {
+  if (!userLocation) return Infinity;
+  if (!entity.location?.latitude || !entity.location?.longitude) return Infinity;
+
+  const distanceMeters = getDistanceMeters(
+    userLocation.latitude,
+    userLocation.longitude,
+    entity.location.latitude,
+    entity.location.longitude
+  );
+
+  return metersToFeet(distanceMeters);
+}
 
 const ENTITY_TYPES = [
   { type: 'ATTRACTION', label: 'Attractions' },
@@ -2093,7 +2179,8 @@ function renderApp() {
       returnStart: live.queue?.RETURN_TIME?.returnStart ?? null,
       hasLightningLane: !!live.queue?.RETURN_TIME,
       showtimes: live.showtimes || [],
-      lastUpdated: live.lastUpdated || null
+      lastUpdated: live.lastUpdated || null,
+      location: item.location || null
     };
   });
 
@@ -2105,6 +2192,7 @@ function renderApp() {
     <input type="text" id="search" placeholder="Search ${typeLabel.toLowerCase()}..." />
     <select id="sortOrder">
       <option value="alpha" ${savedSort === 'alpha' ? 'selected' : ''}>A-Z</option>
+      <option value="closest" ${savedSort === 'closest' ? 'selected' : ''}>Closest</option>
       <option value="wait-low" ${savedSort === 'wait-low' ? 'selected' : ''}>Wait: Low to High</option>
       <option value="wait-high" ${savedSort === 'wait-high' ? 'selected' : ''}>Wait: High to Low</option>
       <option value="ll-early" ${savedSort === 'll-early' ? 'selected' : ''}>LL: Earliest First</option>
@@ -2132,6 +2220,11 @@ function renderApp() {
       switch (sortValue) {
         case 'alpha':
           return a.name.localeCompare(b.name);
+        case 'closest':
+          const distA = getDistanceFeet(a);
+          const distB = getDistanceFeet(b);
+          if (distA === distB) return a.name.localeCompare(b.name);
+          return distA - distB;
         case 'wait-low':
           if (a.waitTime === null && b.waitTime === null) return a.name.localeCompare(b.name);
           if (a.waitTime === null) return 1;
@@ -2174,6 +2267,7 @@ function renderApp() {
       const favorited = isFavorite(item.id);
       const note = getNote(item.id);
       const hasNote = note.length > 0;
+      const distance = formatDistance(item);
       return `
         <div class="card-wrapper" data-ride-id="${item.id}" data-ride-name="${item.name}">
           <div class="card-action card-action-right">${inQueue ? 'Cancel timer' : ''}</div>
@@ -2191,6 +2285,7 @@ function renderApp() {
               ${item.returnStart ? `<span class="ll-time">LL ${formatReturnTime(item.returnStart)}</span>` : (item.hasLightningLane ? `<span class="ll-sold-out">LL SOLD OUT</span>` : '')}
               <span class="ride-status ${getStatusClass(item.status)}">${formatStatus(item.status)}</span>
               ${isDataStale(item.lastUpdated) ? '<span class="stale-warning">Stale</span>' : ''}
+              ${distance ? `<span class="distance">${distance}</span>` : ''}
             </div>
             ${inQueue ? `
               <div class="queue-timer${queueType === 'll' ? ' queue-timer-ll' : ''}">
@@ -2427,6 +2522,9 @@ async function checkForSharedHistory() {
 }
 
 async function init() {
+  // Start geolocation tracking
+  initGeolocation();
+
   try {
     const destinations = await fetchDestinations();
 
