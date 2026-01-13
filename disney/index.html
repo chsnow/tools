@@ -1085,33 +1085,32 @@ let liveDataMap = new Map();
 let showFavoritesOnly = false;
 let userLocation = null;
 
-// Geolocation support
-function initGeolocation() {
-  if ('geolocation' in navigator) {
-    navigator.geolocation.watchPosition(
-      (position) => {
-        userLocation = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude
-        };
-        // Re-render if we're viewing a list that could show distances
-        // But skip if a note editor is open to avoid closing it
-        const hasOpenEditor = document.querySelector('.note-editor[style*="display: flex"]');
-        if (currentEntityType !== 'HISTORY' && !hasOpenEditor) {
-          renderApp();
+// Geolocation support - fetches location once when called
+function updateGeolocation() {
+  return new Promise((resolve) => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          userLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          };
+          resolve(true);
+        },
+        (error) => {
+          console.log('Geolocation error:', error.message);
+          resolve(false);
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 30000,
+          timeout: 10000
         }
-      },
-      (error) => {
-        console.log('Geolocation error:', error.message);
-        userLocation = null;
-      },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 30000,
-        timeout: 10000
-      }
-    );
-  }
+      );
+    } else {
+      resolve(false);
+    }
+  });
 }
 
 // Haversine formula to calculate distance between two coordinates
@@ -2837,7 +2836,7 @@ async function checkForSharedData() {
 
 async function init() {
   // Start geolocation tracking
-  initGeolocation();
+  updateGeolocation();
 
   try {
     const destinations = await fetchDestinations();
@@ -2888,6 +2887,9 @@ async function refreshData() {
   pullText.textContent = 'Refreshing...';
 
   try {
+    // Update geolocation on refresh
+    await updateGeolocation();
+
     if (currentEntityType === 'HISTORY') {
       // History doesn't need refresh from API
       renderHistory();
