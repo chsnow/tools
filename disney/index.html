@@ -1216,27 +1216,41 @@ function setupSwipeHandlers() {
       card.style.transform = `translateX(${diff}px)`;
 
       if (diff < 0) {
-        // Swiping left - log ride
-        if (percent > 0.25) {
-          actionLeft.classList.add('ready');
-          actionLeft.textContent = 'Release to log';
+        // Swiping left
+        if (inQueue) {
+          // Timer running: swipe left to log
+          if (percent > 0.25) {
+            actionLeft.classList.add('ready');
+            actionLeft.textContent = 'Release to log';
+          } else {
+            actionLeft.classList.remove('ready');
+            actionLeft.textContent = 'Log ride';
+          }
         } else {
-          actionLeft.classList.remove('ready');
-          actionLeft.textContent = 'Log ride';
+          // Timer not running: swipe left to start timer
+          if (percent > 0.25) {
+            actionLeft.classList.add('ready');
+            actionLeft.textContent = 'Release to start';
+          } else {
+            actionLeft.classList.remove('ready');
+            actionLeft.textContent = 'Start timer';
+          }
         }
         actionRight.classList.remove('ready');
-        actionRight.textContent = inQueue ? 'Cancel timer' : 'Start timer';
+        actionRight.textContent = inQueue ? 'Cancel timer' : '';
       } else if (diff > 0) {
-        // Swiping right - join/cancel queue
-        if (percent > 0.25) {
-          actionRight.classList.add('ready');
-          actionRight.textContent = inQueue ? 'Release to cancel' : 'Release to start';
-        } else {
-          actionRight.classList.remove('ready');
-          actionRight.textContent = inQueue ? 'Cancel timer' : 'Start timer';
+        // Swiping right - only active when timer is running
+        if (inQueue) {
+          if (percent > 0.25) {
+            actionRight.classList.add('ready');
+            actionRight.textContent = 'Release to cancel';
+          } else {
+            actionRight.classList.remove('ready');
+            actionRight.textContent = 'Cancel timer';
+          }
         }
         actionLeft.classList.remove('ready');
-        actionLeft.textContent = 'Log ride';
+        actionLeft.textContent = inQueue ? 'Log ride' : 'Start timer';
       }
     }
 
@@ -1252,18 +1266,20 @@ function setupSwipeHandlers() {
         const ride = allEntities.find(r => r.id === rideId);
         if (ride) {
           if (diff < 0) {
-            // Swipe left - log ride
-            addRideToHistory(ride, getCurrentParkName());
-            renderApp();
-            return;
-          } else {
-            // Swipe right - toggle queue
+            // Swipe left
             if (inQueue) {
-              endQueue(rideId);
-              showToast(`Timer cancelled: ${ride.name}`);
+              // Timer running: log ride (stops timer and logs)
+              addRideToHistory(ride, getCurrentParkName());
             } else {
+              // Timer not running: start timer
               startQueue(ride, getCurrentParkName());
             }
+            renderApp();
+            return;
+          } else if (inQueue) {
+            // Swipe right - only active when timer is running (cancel timer)
+            endQueue(rideId);
+            showToast(`Timer cancelled: ${ride.name}`);
             renderApp();
             return;
           }
@@ -1272,9 +1288,9 @@ function setupSwipeHandlers() {
 
       card.style.transform = '';
       actionLeft.classList.remove('ready');
-      actionLeft.textContent = 'Log ride';
+      actionLeft.textContent = inQueue ? 'Log ride' : 'Start timer';
       actionRight.classList.remove('ready');
-      actionRight.textContent = inQueue ? 'Cancel timer' : 'Start timer';
+      actionRight.textContent = inQueue ? 'Cancel timer' : '';
       currentX = 0;
       startX = 0;
 
@@ -1370,7 +1386,7 @@ function renderHistory() {
   const history = getRideHistory();
 
   if (history.length === 0) {
-    content.innerHTML = '<div class="no-results">No rides logged yet. Swipe left on a ride to log it.</div>';
+    content.innerHTML = '<div class="no-results">No rides logged yet. Start a timer, then swipe left to log when done.</div>';
     return;
   }
 
@@ -1647,8 +1663,8 @@ function renderApp() {
       const favorited = isFavorite(item.id);
       return `
         <div class="card-wrapper" data-ride-id="${item.id}" data-ride-name="${item.name}">
-          <div class="card-action card-action-right">Start timer</div>
-          <div class="card-action card-action-left">Log ride</div>
+          <div class="card-action card-action-right">${inQueue ? 'Cancel timer' : ''}</div>
+          <div class="card-action card-action-left">${inQueue ? 'Log ride' : 'Start timer'}</div>
           <div class="ride-card ${inQueue ? 'in-queue' : ''}">
             <div class="ride-header">
               <div class="ride-name">${item.name}</div>
