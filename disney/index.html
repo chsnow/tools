@@ -13,6 +13,10 @@
 
   <!-- Manifest and Icons -->
   <link rel="manifest" href="manifest.json">
+
+  <!-- QR Code Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <link rel="apple-touch-icon" href="icon-180.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
 
@@ -749,6 +753,141 @@ body {
 
 .modal-btn-cancel:hover {
   background: rgba(255, 255, 255, 0.25);
+}
+
+.qr-container {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0;
+}
+
+.qr-container img {
+  background: #fff;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.qr-scanner-container {
+  position: relative;
+  width: 100%;
+  max-width: 300px;
+  margin: 0 auto 16px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+}
+
+.qr-scanner-container video {
+  width: 100%;
+  display: block;
+}
+
+.qr-scanner-container canvas {
+  display: none;
+}
+
+.qr-scanner-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.qr-scanner-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 200px;
+  height: 200px;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+}
+
+.qr-scanner-frame::before,
+.qr-scanner-frame::after {
+  content: '';
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border-color: #4caf50;
+  border-style: solid;
+}
+
+.qr-scanner-frame::before {
+  top: -2px;
+  left: -2px;
+  border-width: 4px 0 0 4px;
+  border-radius: 8px 0 0 0;
+}
+
+.qr-scanner-frame::after {
+  top: -2px;
+  right: -2px;
+  border-width: 4px 4px 0 0;
+  border-radius: 0 8px 0 0;
+}
+
+.qr-scanner-corners::before,
+.qr-scanner-corners::after {
+  content: '';
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border-color: #4caf50;
+  border-style: solid;
+}
+
+.qr-scanner-corners::before {
+  bottom: -2px;
+  left: -2px;
+  border-width: 0 0 4px 4px;
+  border-radius: 0 0 0 8px;
+}
+
+.qr-scanner-corners::after {
+  bottom: -2px;
+  right: -2px;
+  border-width: 0 4px 4px 0;
+  border-radius: 0 0 8px 0;
+}
+
+.qr-scanner-status {
+  text-align: center;
+  color: #aaa;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+}
+
+.header-scan-btn {
+  position: absolute;
+  left: 44px;
+  background: none;
+  border: 1.5px solid rgba(255,255,255,0.4);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.6);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.header-scan-btn:hover {
+  border-color: rgba(255,255,255,0.7);
+  color: rgba(255,255,255,0.9);
+}
+
+.header-scan-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
 }
 
 .history-item {
@@ -2027,6 +2166,9 @@ function renderHistory() {
       <div class="history-controls">
         <button class="history-expand-btn" id="expandAllBtn">Expand All</button>
         <button class="history-expand-btn" id="collapseAllBtn">Collapse All</button>
+        <button class="share-btn" id="scanQRBtn" title="Scan QR">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle;"><path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6zm6.5-6.5v3h-3v-3h3M19 5h-6v6h6V5zm-6 8h1.5v1.5H13V13zm1.5 1.5H16V16h-1.5v-1.5zM16 13h1.5v1.5H16V13zm-3 3h1.5v1.5H13V16zm1.5 1.5H16V19h-1.5v-1.5zM16 16h1.5v1.5H16V16zm1.5-1.5H19V16h-1.5v-1.5zm0 3H19V19h-1.5v-1.5zM19 13h-1.5v1.5H19V13z"/></svg>
+        </button>
         <button class="share-btn" id="shareHistoryBtn">
           <span>Share</span>
         </button>
@@ -2108,7 +2250,8 @@ function renderHistory() {
     });
   });
 
-  document.getElementById('shareHistoryBtn').addEventListener('click', shareHistory);
+  document.getElementById('shareHistoryBtn').addEventListener('click', () => showShareMethodModal('history'));
+  document.getElementById('scanQRBtn').addEventListener('click', showQRScanner);
 }
 
 async function shareHistory() {
@@ -2204,14 +2347,14 @@ function showShareTypeModal() {
   if (notesCount > 0) {
     document.getElementById('shareNotesBtn').addEventListener('click', () => {
       modal.remove();
-      shareNotes();
+      showShareMethodModal('notes');
     });
   }
 
   if (historyCount > 0) {
     document.getElementById('shareHistoryModalBtn').addEventListener('click', () => {
       modal.remove();
-      shareHistory();
+      showShareMethodModal('history');
     });
   }
 
@@ -2224,6 +2367,296 @@ function showShareTypeModal() {
       modal.remove();
     }
   });
+}
+
+function showShareMethodModal(type) {
+  const typeLabel = type === 'notes' ? 'Notes' : 'History';
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-title">Share ${typeLabel}</div>
+      <div class="modal-text">How would you like to share?</div>
+      <div class="modal-buttons" style="flex-direction: column;">
+        <button class="modal-btn modal-btn-primary" id="shareLinkBtn">
+          <span style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+            Share Link
+          </span>
+        </button>
+        <button class="modal-btn modal-btn-secondary" id="shareQRBtn">
+          <span style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 11h8V3H3v8zm2-6h4v4H5V5zm8-2v8h8V3h-8zm6 6h-4V5h4v4zM3 21h8v-8H3v8zm2-6h4v4H5v-4zm13 2h-2v-2h2v2zm2-4h-4v2h2v4h2v-6zm-2 6h-2v2h2v-2zm-4 0h-2v2h2v-2zm2 0h2v2h-2v-2z"/></svg>
+            Show QR Code
+          </span>
+        </button>
+        <button class="modal-btn modal-btn-cancel" id="cancelMethodBtn">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  document.getElementById('shareLinkBtn').addEventListener('click', () => {
+    modal.remove();
+    if (type === 'notes') {
+      shareNotes();
+    } else {
+      shareHistory();
+    }
+  });
+
+  document.getElementById('shareQRBtn').addEventListener('click', async () => {
+    modal.remove();
+    if (type === 'notes') {
+      await showQRCodeModal('notes');
+    } else {
+      await showQRCodeModal('history');
+    }
+  });
+
+  document.getElementById('cancelMethodBtn').addEventListener('click', () => {
+    modal.remove();
+  });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.remove();
+    }
+  });
+}
+
+async function showQRCodeModal(type) {
+  const typeLabel = type === 'notes' ? 'Notes' : 'History';
+  let encoded;
+
+  if (type === 'notes') {
+    const notes = getNotes();
+    encoded = await encodeNotesToUrl(notes);
+  } else {
+    const history = getRideHistory();
+    encoded = await encodeHistoryToUrl(history);
+  }
+
+  if (!encoded) {
+    showToast('Failed to generate QR code');
+    return;
+  }
+
+  // QR data format: type prefix + encoded data
+  const qrData = (type === 'notes' ? 'N:' : 'H:') + encoded;
+
+  // Check data size - QR codes have limits
+  if (qrData.length > 2000) {
+    showToast('Too much data for QR code. Try sharing fewer items.');
+    return;
+  }
+
+  // Generate QR code
+  let qrImageUrl;
+  try {
+    const qr = qrcode(0, 'M');
+    qr.addData(qrData);
+    qr.make();
+    qrImageUrl = qr.createDataURL(6, 4);
+  } catch (e) {
+    console.error('QR generation error:', e);
+    showToast('Failed to generate QR code');
+    return;
+  }
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-title">Share ${typeLabel}</div>
+      <div class="modal-text">Have the other person scan this QR code with their Disneyland app.</div>
+      <div class="qr-container">
+        <img src="${qrImageUrl}" alt="QR Code">
+      </div>
+      <div class="modal-buttons">
+        <button class="modal-btn modal-btn-cancel" id="closeQRModal">Done</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal || e.target.id === 'closeQRModal') {
+      modal.remove();
+    }
+  });
+}
+
+let qrScannerStream = null;
+let qrScannerAnimationId = null;
+
+async function showQRScanner() {
+  // Check if BarcodeDetector is available
+  const hasBarcodeDetector = 'BarcodeDetector' in window;
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'qrScannerModal';
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-title">Scan QR Code</div>
+      <div class="modal-text">Point your camera at a QR code to import shared data.</div>
+      <div class="qr-scanner-container">
+        <video id="qrVideo" autoplay playsinline muted></video>
+        <canvas id="qrCanvas"></canvas>
+        <div class="qr-scanner-overlay">
+          <div class="qr-scanner-frame">
+            <div class="qr-scanner-corners"></div>
+          </div>
+        </div>
+      </div>
+      <div class="qr-scanner-status" id="qrScannerStatus">Initializing camera...</div>
+      <div class="modal-buttons">
+        <button class="modal-btn modal-btn-cancel" id="closeQRScanner">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const video = document.getElementById('qrVideo');
+  const canvas = document.getElementById('qrCanvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const statusEl = document.getElementById('qrScannerStatus');
+
+  const closeScanner = () => {
+    if (qrScannerAnimationId) {
+      cancelAnimationFrame(qrScannerAnimationId);
+      qrScannerAnimationId = null;
+    }
+    if (qrScannerStream) {
+      qrScannerStream.getTracks().forEach(track => track.stop());
+      qrScannerStream = null;
+    }
+    modal.remove();
+  };
+
+  document.getElementById('closeQRScanner').addEventListener('click', closeScanner);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closeScanner();
+    }
+  });
+
+  try {
+    qrScannerStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' }
+    });
+    video.srcObject = qrScannerStream;
+    await video.play();
+
+    statusEl.textContent = 'Scanning...';
+
+    // Set canvas size to match video
+    video.addEventListener('loadedmetadata', () => {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+    });
+
+    let barcodeDetector = null;
+    if (hasBarcodeDetector) {
+      try {
+        barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+      } catch (e) {
+        console.log('BarcodeDetector not supported, will use fallback');
+      }
+    }
+
+    const scanFrame = async () => {
+      if (!qrScannerStream) return;
+
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        try {
+          let result = null;
+
+          // Try BarcodeDetector first (native, faster)
+          if (barcodeDetector) {
+            const barcodes = await barcodeDetector.detect(canvas);
+            if (barcodes.length > 0) {
+              result = barcodes[0].rawValue;
+            }
+          }
+
+          // Fallback to jsQR library
+          if (!result && typeof jsQR !== 'undefined') {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, canvas.width, canvas.height, {
+              inversionAttempts: 'dontInvert'
+            });
+            if (code) {
+              result = code.data;
+            }
+          }
+
+          if (result) {
+            closeScanner();
+            await processQRData(result);
+            return;
+          }
+        } catch (e) {
+          console.error('Scan error:', e);
+        }
+      }
+
+      qrScannerAnimationId = requestAnimationFrame(scanFrame);
+    };
+
+    scanFrame();
+
+  } catch (e) {
+    console.error('Camera error:', e);
+    statusEl.textContent = 'Camera access denied. Please allow camera access and try again.';
+  }
+}
+
+async function processQRData(data) {
+  // Parse QR data format: "N:" for notes, "H:" for history
+  if (!data || data.length < 3) {
+    showToast('Invalid QR code');
+    return;
+  }
+
+  const type = data.substring(0, 2);
+  const encoded = data.substring(2);
+
+  if (type === 'N:') {
+    // Decode notes
+    const notes = await decodeNotesFromUrl(encoded);
+    if (!notes || Object.keys(notes).length === 0) {
+      showToast('Could not read notes from QR code');
+      return;
+    }
+
+    // Build entity names map for display
+    const entityNames = {};
+    Object.keys(notes).forEach(id => {
+      const entity = allEntities.find(e => e.id === id);
+      entityNames[id] = entity ? entity.name : id;
+    });
+
+    showNotesImportModal(notes, entityNames);
+
+  } else if (type === 'H:') {
+    // Decode history
+    const history = await decodeHistoryFromUrl(encoded);
+    if (!history || history.length === 0) {
+      showToast('Could not read history from QR code');
+      return;
+    }
+
+    showImportModal(history);
+
+  } else {
+    showToast('Unknown QR code format');
+  }
 }
 
 async function shareNotes() {
@@ -2393,6 +2826,11 @@ function renderParkToggle() {
         <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
       </svg>
     </button>
+    <button class="header-scan-btn" title="Scan QR Code">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6zm6.5-6.5v3h-3v-3h3M19 5h-6v6h6V5zm-6 8h1.5v1.5H13V13zm1.5 1.5H16V16h-1.5v-1.5zM16 13h1.5v1.5H16V13zm-3 3h1.5v1.5H13V16zm1.5 1.5H16V19h-1.5v-1.5zM16 16h1.5v1.5H16V16zm1.5-1.5H19V16h-1.5v-1.5zm0 3H19V19h-1.5v-1.5zM19 13h-1.5v1.5H19V13z"/>
+      </svg>
+    </button>
     ${parks.map(park => `
       <button class="park-btn ${park.id === currentParkId ? 'active' : ''}" data-park-id="${park.id}">
         ${getParkLabel(park.name)}
@@ -2418,6 +2856,7 @@ function renderParkToggle() {
   });
 
   toggle.querySelector('.header-share-btn').addEventListener('click', showShareTypeModal);
+  toggle.querySelector('.header-scan-btn').addEventListener('click', showQRScanner);
 }
 
 function renderEntityTabs() {
