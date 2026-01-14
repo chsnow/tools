@@ -2975,6 +2975,9 @@ function renderApp() {
           if (b.waitTime === null) return -1;
           return a.waitTime - b.waitTime;
         case 'wait-high':
+          // Put DOWN attractions at the top
+          if (a.status === 'DOWN' && b.status !== 'DOWN') return -1;
+          if (a.status !== 'DOWN' && b.status === 'DOWN') return 1;
           if (a.waitTime === null && b.waitTime === null) return a.name.localeCompare(b.name);
           if (a.waitTime === null) return 1;
           if (b.waitTime === null) return -1;
