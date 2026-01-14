@@ -1937,9 +1937,9 @@ function setupSwipeHandlers() {
               renderApp();
             } else {
               // Timer not running: start timer
-              // Check if ride has Lightning Lane - if so, ask which queue type
+              // Check if ride has Lightning Lane (regular or paid) - if so, ask which queue type
               const liveData = liveDataMap.get(ride.id);
-              const hasLL = !!liveData?.queue?.RETURN_TIME;
+              const hasLL = !!liveData?.queue?.RETURN_TIME || !!liveData?.queue?.PAID_RETURN_TIME;
               if (hasLL) {
                 showQueueTypeModal(ride, getCurrentParkName(), (queueType) => {
                   startQueue(ride, getCurrentParkName(), queueType);
@@ -2920,6 +2920,8 @@ function renderApp() {
       waitTime: live.queue?.STANDBY?.waitTime ?? null,
       returnStart: live.queue?.RETURN_TIME?.returnStart ?? null,
       hasLightningLane: !!live.queue?.RETURN_TIME,
+      paidReturnStart: live.queue?.PAID_RETURN_TIME?.returnStart ?? null,
+      hasPaidLightningLane: !!live.queue?.PAID_RETURN_TIME,
       showtimes: live.showtimes || [],
       lastUpdated: live.lastUpdated || null,
       location: item.location || null
@@ -2977,21 +2979,29 @@ function renderApp() {
           if (a.waitTime === null) return 1;
           if (b.waitTime === null) return -1;
           return b.waitTime - a.waitTime;
-        case 'll-early':
-          if (!a.returnStart && !b.returnStart) return a.name.localeCompare(b.name);
-          if (!a.returnStart) return 1;
-          if (!b.returnStart) return -1;
-          return new Date(a.returnStart) - new Date(b.returnStart);
-        case 'll-late':
-          if (!a.returnStart && !b.returnStart) {
-            if (a.hasLightningLane && b.hasLightningLane) return a.name.localeCompare(b.name);
-            if (a.hasLightningLane) return -1;
-            if (b.hasLightningLane) return 1;
+        case 'll-early': {
+          const aReturn = a.returnStart || a.paidReturnStart;
+          const bReturn = b.returnStart || b.paidReturnStart;
+          if (!aReturn && !bReturn) return a.name.localeCompare(b.name);
+          if (!aReturn) return 1;
+          if (!bReturn) return -1;
+          return new Date(aReturn) - new Date(bReturn);
+        }
+        case 'll-late': {
+          const aReturn = a.returnStart || a.paidReturnStart;
+          const bReturn = b.returnStart || b.paidReturnStart;
+          const aHasAnyLL = a.hasLightningLane || a.hasPaidLightningLane;
+          const bHasAnyLL = b.hasLightningLane || b.hasPaidLightningLane;
+          if (!aReturn && !bReturn) {
+            if (aHasAnyLL && bHasAnyLL) return a.name.localeCompare(b.name);
+            if (aHasAnyLL) return -1;
+            if (bHasAnyLL) return 1;
             return a.name.localeCompare(b.name);
           }
-          if (!a.returnStart) return a.hasLightningLane ? -1 : 1;
-          if (!b.returnStart) return b.hasLightningLane ? 1 : -1;
-          return new Date(b.returnStart) - new Date(a.returnStart);
+          if (!aReturn) return aHasAnyLL ? -1 : 1;
+          if (!bReturn) return bHasAnyLL ? 1 : -1;
+          return new Date(bReturn) - new Date(aReturn);
+        }
         default:
           return a.name.localeCompare(b.name);
       }
@@ -3024,6 +3034,7 @@ function renderApp() {
             </div>
             <div class="status-row">
               ${item.waitTime !== null ? `<span class="wait-time">${item.waitTime} <span>min</span></span>` : ''}
+              ${item.paidReturnStart ? `<span class="ll-time">LL$ ${formatReturnTime(item.paidReturnStart)}</span>` : (item.hasPaidLightningLane ? `<span class="ll-sold-out">LL$ SOLD OUT</span>` : '')}
               ${item.returnStart ? `<span class="ll-time">LL ${formatReturnTime(item.returnStart)}</span>` : (item.hasLightningLane ? `<span class="ll-sold-out">LL SOLD OUT</span>` : '')}
               <span class="ride-status ${getStatusClass(item.status)}">${formatStatus(item.status)}</span>
               ${isDataStale(item.lastUpdated) ? '<span class="stale-warning">Stale</span>' : ''}
