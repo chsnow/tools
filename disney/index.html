@@ -3121,7 +3121,13 @@ async function processTextImport(data) {
       showToast('Could not read notes from data');
       return;
     }
-    showNotesImportModal(notes);
+    // Build entity names map for display
+    const entityNames = {};
+    Object.keys(notes).forEach(id => {
+      const entity = allEntities.find(e => e.id === id);
+      entityNames[id] = entity ? entity.name : id;
+    });
+    showNotesImportModal(notes, entityNames);
   } else if (data.startsWith('DISNEY_H:')) {
     const encoded = data.substring(9);
     const history = await decodeHistoryFromUrl(encoded);
@@ -3138,7 +3144,13 @@ async function processTextImport(data) {
       showToast('Could not read notes from data');
       return;
     }
-    showNotesImportModal(notes);
+    // Build entity names map for display
+    const entityNames = {};
+    Object.keys(notes).forEach(id => {
+      const entity = allEntities.find(e => e.id === id);
+      entityNames[id] = entity ? entity.name : id;
+    });
+    showNotesImportModal(notes, entityNames);
   } else if (data.startsWith('H:')) {
     const encoded = data.substring(2);
     const history = await decodeHistoryFromUrl(encoded);
