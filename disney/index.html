@@ -1185,6 +1185,73 @@ footer a {
     display: none;
   }
 }
+
+.day-selector-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.day-selector-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.day-selector-item:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.day-selector-item input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: #4caf50;
+  cursor: pointer;
+}
+
+.day-selector-label {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.day-selector-date {
+  font-weight: bold;
+}
+
+.day-selector-count {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.85rem;
+}
+
+.select-all-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.select-all-btn {
+  background: none;
+  border: none;
+  color: #64b5f6;
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.select-all-btn:hover {
+  text-decoration: underline;
+}
   </style>
 </head>
 <body>
@@ -1211,7 +1278,7 @@ footer a {
 
     <footer>
       Data provided by <a href="https://themeparks.wiki" target="_blank">ThemeParks.wiki</a>
-      <div class="version">Version: 2026-01-13 note-sharing</div>
+      <div class="version">Version: 2026-01-15 trip-report</div>
     </footer>
   </div>
 
@@ -2374,6 +2441,7 @@ function showShareTypeModal() {
 
 function showShareMethodModal(type) {
   const typeLabel = type === 'notes' ? 'Notes' : 'History';
+  const showTripReport = type === 'history';
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
   modal.innerHTML = `
@@ -2393,6 +2461,14 @@ function showShareMethodModal(type) {
             Show QR Code
           </span>
         </button>
+        ${showTripReport ? `
+        <button class="modal-btn modal-btn-secondary" id="tripReportBtn" style="background: #9c27b0;">
+          <span style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+            Trip Report
+          </span>
+        </button>
+        ` : ''}
         <button class="modal-btn modal-btn-cancel" id="cancelMethodBtn">Cancel</button>
       </div>
     </div>
@@ -2417,7 +2493,379 @@ function showShareMethodModal(type) {
     }
   });
 
+  if (showTripReport) {
+    document.getElementById('tripReportBtn').addEventListener('click', () => {
+      modal.remove();
+      showTripReportDaySelector();
+    });
+  }
+
   document.getElementById('cancelMethodBtn').addEventListener('click', () => {
+    modal.remove();
+  });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.remove();
+    }
+  });
+}
+
+function showTripReportDaySelector() {
+  const history = getRideHistory();
+  if (history.length === 0) {
+    showToast('No history to create report from');
+    return;
+  }
+
+  const getDateKey = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  };
+
+  const formatDateDisplay = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+
+  // Group history by day
+  const dayGroups = new Map();
+  history.forEach(item => {
+    const dateKey = getDateKey(item.timestamp);
+    if (!dayGroups.has(dateKey)) {
+      dayGroups.set(dateKey, []);
+    }
+    dayGroups.get(dateKey).push(item);
+  });
+
+  const sortedDays = Array.from(dayGroups.entries()).sort((a, b) => {
+    return new Date(b[1][0].timestamp) - new Date(a[1][0].timestamp);
+  });
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-title">Trip Report</div>
+      <div class="modal-text">Select which days to include in your trip report:</div>
+      <div class="select-all-row">
+        <button class="select-all-btn" id="selectAllDaysBtn">Select All</button>
+        <button class="select-all-btn" id="deselectAllDaysBtn">Deselect All</button>
+      </div>
+      <div class="day-selector-list">
+        ${sortedDays.map(([dateKey, items], index) => `
+          <label class="day-selector-item">
+            <input type="checkbox" value="${dateKey}" ${index < 3 ? 'checked' : ''}>
+            <div class="day-selector-label">
+              <span class="day-selector-date">${formatDateDisplay(items[0].timestamp)}</span>
+              <span class="day-selector-count">${items.length} ride${items.length !== 1 ? 's' : ''}</span>
+            </div>
+          </label>
+        `).join('')}
+      </div>
+      <div class="modal-buttons">
+        <button class="modal-btn modal-btn-primary" id="generateReportBtn">Generate Report</button>
+        <button class="modal-btn modal-btn-cancel" id="cancelDaySelectorBtn">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const checkboxes = modal.querySelectorAll('input[type="checkbox"]');
+
+  document.getElementById('selectAllDaysBtn').addEventListener('click', () => {
+    checkboxes.forEach(cb => cb.checked = true);
+  });
+
+  document.getElementById('deselectAllDaysBtn').addEventListener('click', () => {
+    checkboxes.forEach(cb => cb.checked = false);
+  });
+
+  document.getElementById('generateReportBtn').addEventListener('click', () => {
+    const selectedDays = Array.from(checkboxes)
+      .filter(cb => cb.checked)
+      .map(cb => cb.value);
+
+    if (selectedDays.length === 0) {
+      showToast('Please select at least one day');
+      return;
+    }
+
+    // Filter history to selected days
+    const selectedHistory = history.filter(item => {
+      const dateKey = getDateKey(item.timestamp);
+      return selectedDays.includes(dateKey);
+    });
+
+    modal.remove();
+    generateAndShareTripReport(selectedHistory, selectedDays);
+  });
+
+  document.getElementById('cancelDaySelectorBtn').addEventListener('click', () => {
+    modal.remove();
+  });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.remove();
+    }
+  });
+}
+
+function generateTripReport(history, selectedDays) {
+  const getDateKey = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  };
+
+  const formatDate = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  };
+
+  const formatTime = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  };
+
+  // Group by day for processing
+  const dayGroups = new Map();
+  history.forEach(item => {
+    const dateKey = getDateKey(item.timestamp);
+    if (!dayGroups.has(dateKey)) {
+      dayGroups.set(dateKey, []);
+    }
+    dayGroups.get(dateKey).push(item);
+  });
+
+  // Sort days chronologically (oldest first)
+  const sortedDays = Array.from(dayGroups.entries()).sort((a, b) => {
+    return new Date(a[1][0].timestamp) - new Date(b[1][0].timestamp);
+  });
+
+  // Calculate statistics
+  const totalRides = history.length;
+  const uniqueDays = sortedDays.length;
+  const dlrCount = history.filter(h => h.parkName && h.parkName.includes('Disneyland') && !h.parkName.includes('California Adventure')).length;
+  const dcaCount = history.filter(h => h.parkName && h.parkName.includes('California Adventure')).length;
+  const llCount = history.filter(h => h.queueType === 'll').length;
+  const standbyCount = totalRides - llCount;
+
+  // Calculate wait time stats
+  const withWaitTime = history.filter(h => h.actualWaitMins !== null);
+  const avgWait = withWaitTime.length > 0
+    ? Math.round(withWaitTime.reduce((sum, h) => sum + h.actualWaitMins, 0) / withWaitTime.length)
+    : null;
+  const totalWaitMins = withWaitTime.reduce((sum, h) => sum + h.actualWaitMins, 0);
+  const maxWait = withWaitTime.length > 0 ? Math.max(...withWaitTime.map(h => h.actualWaitMins)) : null;
+  const minWait = withWaitTime.length > 0 ? Math.min(...withWaitTime.map(h => h.actualWaitMins)) : null;
+
+  // Calculate time saved with posted waits
+  const withBothWaits = history.filter(h => h.actualWaitMins !== null && h.expectedWaitMins !== null);
+  const totalPostedMins = withBothWaits.reduce((sum, h) => sum + h.expectedWaitMins, 0);
+  const totalActualMins = withBothWaits.reduce((sum, h) => sum + h.actualWaitMins, 0);
+  const timeSaved = totalPostedMins - totalActualMins;
+
+  // Find most ridden attractions
+  const rideCounts = {};
+  history.forEach(h => {
+    rideCounts[h.name] = (rideCounts[h.name] || 0) + 1;
+  });
+  const sortedAttractions = Object.entries(rideCounts).sort((a, b) => b[1] - a[1]);
+
+  // Get date range
+  const firstDate = new Date(sortedDays[0][1][0].timestamp);
+  const lastDate = new Date(sortedDays[sortedDays.length - 1][1][0].timestamp);
+  const isSameDay = sortedDays.length === 1;
+
+  // Build report
+  let report = '';
+
+  // Title
+  report += '='.repeat(50) + '\n';
+  report += 'DISNEYLAND TRIP REPORT\n';
+  report += '='.repeat(50) + '\n\n';
+
+  // Summary paragraph
+  if (isSameDay) {
+    report += `On ${formatDate(firstDate)}, `;
+  } else {
+    const dateRangeStr = `${firstDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} - ${lastDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
+    report += `From ${dateRangeStr}, `;
+  }
+
+  const parkVisits = [];
+  if (dlrCount > 0) parkVisits.push('Disneyland');
+  if (dcaCount > 0) parkVisits.push('Disney California Adventure');
+
+  if (parkVisits.length === 2) {
+    report += `we visited both ${parkVisits[0]} and ${parkVisits[1]}`;
+  } else if (parkVisits.length === 1) {
+    report += `we visited ${parkVisits[0]}`;
+  } else {
+    report += 'we visited the Disneyland Resort';
+  }
+
+  report += ` and experienced ${totalRides} attraction${totalRides !== 1 ? 's' : ''}`;
+
+  if (uniqueDays > 1) {
+    report += ` over ${uniqueDays} days`;
+  }
+  report += '. ';
+
+  if (llCount > 0) {
+    report += `We used Lightning Lane ${llCount} time${llCount !== 1 ? 's' : ''}, `;
+    report += `making up ${Math.round(llCount / totalRides * 100)}% of our rides. `;
+  }
+
+  if (avgWait !== null) {
+    report += `Our average actual wait time was ${avgWait} minutes`;
+    if (timeSaved > 0) {
+      report += `, and we saved approximately ${timeSaved} minutes compared to posted wait times`;
+    }
+    report += '.';
+  }
+  report += '\n\n';
+
+  // Statistics section
+  report += '-'.repeat(50) + '\n';
+  report += 'TRIP STATISTICS\n';
+  report += '-'.repeat(50) + '\n\n';
+
+  report += `Total Attractions:    ${totalRides}\n`;
+  report += `Days at the Parks:    ${uniqueDays}\n`;
+  if (dlrCount > 0) report += `Disneyland Rides:     ${dlrCount}\n`;
+  if (dcaCount > 0) report += `DCA Rides:            ${dcaCount}\n`;
+  report += `Standby Queue:        ${standbyCount}\n`;
+  if (llCount > 0) report += `Lightning Lane:       ${llCount}\n`;
+  report += '\n';
+
+  if (withWaitTime.length > 0) {
+    report += 'Wait Time Stats:\n';
+    report += `  Average Wait:       ${avgWait} min\n`;
+    report += `  Longest Wait:       ${maxWait} min\n`;
+    report += `  Shortest Wait:      ${minWait} min\n`;
+    report += `  Total Wait Time:    ${Math.floor(totalWaitMins / 60)}h ${totalWaitMins % 60}m\n`;
+    if (timeSaved !== 0) {
+      const savedLabel = timeSaved > 0 ? 'saved' : 'over posted';
+      report += `  Time ${timeSaved > 0 ? 'Saved' : 'Over Posted'}:       ${Math.abs(timeSaved)} min\n`;
+    }
+    report += '\n';
+  }
+
+  if (sortedAttractions.length > 0) {
+    report += 'Top Attractions:\n';
+    sortedAttractions.slice(0, 5).forEach(([name, count], i) => {
+      report += `  ${i + 1}. ${name}${count > 1 ? ` (${count}x)` : ''}\n`;
+    });
+    report += '\n';
+  }
+
+  // Per-day detailed report
+  report += '-'.repeat(50) + '\n';
+  report += 'DAY-BY-DAY BREAKDOWN\n';
+  report += '-'.repeat(50) + '\n';
+
+  sortedDays.forEach(([dateKey, items], dayIndex) => {
+    report += '\n';
+    report += `*** ${formatDate(items[0].timestamp)} ***\n\n`;
+
+    // Day stats
+    const dayDlr = items.filter(h => h.parkName && h.parkName.includes('Disneyland') && !h.parkName.includes('California Adventure')).length;
+    const dayDca = items.filter(h => h.parkName && h.parkName.includes('California Adventure')).length;
+    const dayLL = items.filter(h => h.queueType === 'll').length;
+
+    const parksToday = [];
+    if (dayDlr > 0) parksToday.push(`Disneyland (${dayDlr})`);
+    if (dayDca > 0) parksToday.push(`DCA (${dayDca})`);
+
+    report += `Rides: ${items.length}`;
+    if (parksToday.length > 0) report += ` | Parks: ${parksToday.join(', ')}`;
+    if (dayLL > 0) report += ` | Lightning Lane: ${dayLL}`;
+    report += '\n\n';
+
+    // Sort items by time
+    const sortedItems = [...items].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    sortedItems.forEach((item, idx) => {
+      const time = formatTime(item.timestamp);
+      const llBadge = item.queueType === 'll' ? ' [LL]' : '';
+      let waitInfo = '';
+
+      if (item.actualWaitMins !== null) {
+        if (item.expectedWaitMins !== null) {
+          const diff = item.expectedWaitMins - item.actualWaitMins;
+          const diffStr = diff > 0 ? `${diff} min faster` : diff < 0 ? `${Math.abs(diff)} min longer` : 'as posted';
+          waitInfo = ` - ${item.actualWaitMins} min wait (posted ${item.expectedWaitMins}, ${diffStr})`;
+        } else {
+          waitInfo = ` - ${item.actualWaitMins} min wait`;
+        }
+      }
+
+      report += `${time}  ${item.name}${llBadge}${waitInfo}\n`;
+    });
+  });
+
+  report += '\n' + '='.repeat(50) + '\n';
+  report += 'Generated by Disneyland Ride Tracker\n';
+  report += '='.repeat(50) + '\n';
+
+  return report;
+}
+
+async function generateAndShareTripReport(history, selectedDays) {
+  const report = generateTripReport(history, selectedDays);
+
+  // Try native share API first (mobile)
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: 'Disneyland Trip Report',
+        text: report
+      });
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      // Fall through to clipboard
+    }
+  }
+
+  // Fall back to clipboard
+  try {
+    await navigator.clipboard.writeText(report);
+    showToast('Trip report copied to clipboard!');
+  } catch (e) {
+    // Final fallback: show in modal
+    showTripReportPreview(report);
+  }
+}
+
+function showTripReportPreview(report) {
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal" style="max-width: 600px;">
+      <div class="modal-title">Trip Report</div>
+      <div class="modal-text">Copy this report to share:</div>
+      <textarea readonly style="width: 100%; height: 300px; padding: 12px; font-size: 12px; font-family: monospace; margin-bottom: 16px; border-radius: 6px; border: none; background: rgba(0,0,0,0.3); color: #fff; resize: vertical;" onclick="this.select()">${escapeHtml(report)}</textarea>
+      <div class="modal-buttons">
+        <button class="modal-btn modal-btn-primary" id="copyReportBtn">Copy to Clipboard</button>
+        <button class="modal-btn modal-btn-cancel" id="closeReportBtn">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  document.getElementById('copyReportBtn').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(report);
+      showToast('Copied to clipboard!');
+    } catch (e) {
+      showToast('Failed to copy');
+    }
+  });
+
+  document.getElementById('closeReportBtn').addEventListener('click', () => {
     modal.remove();
   });
 
