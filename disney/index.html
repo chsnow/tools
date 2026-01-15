@@ -906,6 +906,54 @@ body {
   fill: currentColor;
 }
 
+.header-import-btn {
+  position: absolute;
+  left: 88px;
+  background: none;
+  border: 1.5px solid rgba(255,255,255,0.4);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.6);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.header-import-btn:hover {
+  border-color: rgba(255,255,255,0.7);
+  color: rgba(255,255,255,0.9);
+}
+
+.header-import-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.text-export-modal textarea {
+  width: 100%;
+  height: 120px;
+  font-family: monospace;
+  font-size: 12px;
+  padding: 10px;
+  border: 1px solid #444;
+  border-radius: 8px;
+  background: #1a1a2e;
+  color: #fff;
+  resize: none;
+  margin: 12px 0;
+}
+
+.text-export-modal .copy-hint {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 12px;
+}
+
 .history-item {
   position: relative;
   background: #252542;
@@ -2252,6 +2300,9 @@ function renderHistory() {
         <button class="share-btn" id="scanQRBtn" title="Scan QR">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle;"><path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6zm6.5-6.5v3h-3v-3h3M19 5h-6v6h6V5zm-6 8h1.5v1.5H13V13zm1.5 1.5H16V16h-1.5v-1.5zM16 13h1.5v1.5H16V13zm-3 3h1.5v1.5H13V16zm1.5 1.5H16V19h-1.5v-1.5zM16 16h1.5v1.5H16V16zm1.5-1.5H19V16h-1.5v-1.5zm0 3H19V19h-1.5v-1.5zM19 13h-1.5v1.5H19V13z"/></svg>
         </button>
+        <button class="share-btn" id="importTextBtn" title="Import from Text">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        </button>
         <button class="share-btn" id="shareHistoryBtn">
           <span>Share</span>
         </button>
@@ -2335,6 +2386,7 @@ function renderHistory() {
 
   document.getElementById('shareHistoryBtn').addEventListener('click', () => showShareMethodModal('history'));
   document.getElementById('scanQRBtn').addEventListener('click', showQRScanner);
+  document.getElementById('importTextBtn').addEventListener('click', showTextImportModal);
 }
 
 async function shareHistory() {
@@ -2474,6 +2526,12 @@ function showShareMethodModal(type) {
             Show QR Code
           </span>
         </button>
+        <button class="modal-btn modal-btn-secondary" id="shareTextBtn">
+          <span style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+            Export as Text
+          </span>
+        </button>
         ${showTripReport ? `
         <button class="modal-btn modal-btn-secondary" id="tripReportBtn" style="background: #9c27b0;">
           <span style="display: flex; align-items: center; justify-content: center; gap: 8px;">
@@ -2503,6 +2561,15 @@ function showShareMethodModal(type) {
       await showQRCodeModal('notes');
     } else {
       await showQRCodeModal('history');
+    }
+  });
+
+  document.getElementById('shareTextBtn').addEventListener('click', async () => {
+    modal.remove();
+    if (type === 'notes') {
+      await showTextExportModal('notes');
+    } else {
+      await showTextExportModal('history');
     }
   });
 
@@ -2942,6 +3009,149 @@ async function showQRCodeModal(type) {
   });
 }
 
+async function showTextExportModal(type) {
+  const typeLabel = type === 'notes' ? 'Notes' : 'History';
+  let encoded;
+
+  if (type === 'notes') {
+    const notes = getNotes();
+    encoded = await encodeNotesToUrl(notes);
+  } else {
+    const history = getRideHistory();
+    encoded = await encodeHistoryToUrl(history);
+  }
+
+  if (!encoded) {
+    showToast('Failed to generate export data');
+    return;
+  }
+
+  // Prefix to identify data type
+  const exportData = (type === 'notes' ? 'DISNEY_N:' : 'DISNEY_H:') + encoded;
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal text-export-modal">
+      <div class="modal-title">Export ${typeLabel}</div>
+      <div class="modal-text">Copy this text and send it via text message, email, or any app.</div>
+      <textarea id="exportTextArea" readonly>${exportData}</textarea>
+      <div class="copy-hint">The recipient can import using the paste button in the app header.</div>
+      <div class="modal-buttons">
+        <button class="modal-btn modal-btn-primary" id="copyExportBtn">Copy to Clipboard</button>
+        <button class="modal-btn modal-btn-cancel" id="closeExportModal">Done</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const textarea = document.getElementById('exportTextArea');
+  textarea.select();
+
+  document.getElementById('copyExportBtn').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(exportData);
+      showToast('Copied to clipboard!');
+    } catch {
+      textarea.select();
+      document.execCommand('copy');
+      showToast('Copied to clipboard!');
+    }
+  });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal || e.target.id === 'closeExportModal') {
+      modal.remove();
+    }
+  });
+}
+
+async function showTextImportModal() {
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal text-export-modal">
+      <div class="modal-title">Import Data</div>
+      <div class="modal-text">Paste the shared text below, or use "Read from Clipboard" if you've already copied it.</div>
+      <textarea id="importTextArea" placeholder="Paste DISNEY_N: or DISNEY_H: data here..."></textarea>
+      <div class="modal-buttons">
+        <button class="modal-btn modal-btn-secondary" id="pasteClipboardBtn">Read from Clipboard</button>
+        <button class="modal-btn modal-btn-primary" id="importDataBtn">Import</button>
+        <button class="modal-btn modal-btn-cancel" id="closeImportModal">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const textarea = document.getElementById('importTextArea');
+
+  document.getElementById('pasteClipboardBtn').addEventListener('click', async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      textarea.value = text;
+      showToast('Pasted from clipboard');
+    } catch {
+      showToast('Could not read clipboard. Please paste manually.');
+    }
+  });
+
+  document.getElementById('importDataBtn').addEventListener('click', async () => {
+    const data = textarea.value.trim();
+    if (!data) {
+      showToast('Please paste the shared data first');
+      return;
+    }
+    modal.remove();
+    await processTextImport(data);
+  });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal || e.target.id === 'closeImportModal') {
+      modal.remove();
+    }
+  });
+}
+
+async function processTextImport(data) {
+  // Parse text data format: "DISNEY_N:" for notes, "DISNEY_H:" for history
+  if (data.startsWith('DISNEY_N:')) {
+    const encoded = data.substring(9);
+    const notes = await decodeNotesFromUrl(encoded);
+    if (!notes || Object.keys(notes).length === 0) {
+      showToast('Could not read notes from data');
+      return;
+    }
+    showNotesImportModal(notes);
+  } else if (data.startsWith('DISNEY_H:')) {
+    const encoded = data.substring(9);
+    const history = await decodeHistoryFromUrl(encoded);
+    if (!history || history.length === 0) {
+      showToast('Could not read history from data');
+      return;
+    }
+    showHistoryImportModal(history);
+  } else if (data.startsWith('N:')) {
+    // Also support QR format for compatibility
+    const encoded = data.substring(2);
+    const notes = await decodeNotesFromUrl(encoded);
+    if (!notes || Object.keys(notes).length === 0) {
+      showToast('Could not read notes from data');
+      return;
+    }
+    showNotesImportModal(notes);
+  } else if (data.startsWith('H:')) {
+    const encoded = data.substring(2);
+    const history = await decodeHistoryFromUrl(encoded);
+    if (!history || history.length === 0) {
+      showToast('Could not read history from data');
+      return;
+    }
+    showHistoryImportModal(history);
+  } else {
+    showToast('Invalid data format. Expected DISNEY_N: or DISNEY_H: prefix.');
+  }
+}
+
 let qrScannerStream = null;
 let qrScannerAnimationId = null;
 
@@ -3286,6 +3496,11 @@ function renderParkToggle() {
         <path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6zm6.5-6.5v3h-3v-3h3M19 5h-6v6h6V5zm-6 8h1.5v1.5H13V13zm1.5 1.5H16V16h-1.5v-1.5zM16 13h1.5v1.5H16V13zm-3 3h1.5v1.5H13V16zm1.5 1.5H16V19h-1.5v-1.5zM16 16h1.5v1.5H16V16zm1.5-1.5H19V16h-1.5v-1.5zm0 3H19V19h-1.5v-1.5zM19 13h-1.5v1.5H19V13z"/>
       </svg>
     </button>
+    <button class="header-import-btn" title="Import from Text">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+      </svg>
+    </button>
     ${parks.map(park => `
       <button class="park-btn ${park.id === currentParkId ? 'active' : ''}" data-park-id="${park.id}">
         ${getParkLabel(park.name)}
@@ -3312,6 +3527,7 @@ function renderParkToggle() {
 
   toggle.querySelector('.header-share-btn').addEventListener('click', showShareTypeModal);
   toggle.querySelector('.header-scan-btn').addEventListener('click', showQRScanner);
+  toggle.querySelector('.header-import-btn').addEventListener('click', showTextImportModal);
 }
 
 function renderEntityTabs() {
