@@ -444,22 +444,13 @@ body {
   transition: background 0.2s;
 }
 
-.note-editor-btn.save {
+.note-editor-btn.done {
   background: #4caf50;
   color: #fff;
 }
 
-.note-editor-btn.save:hover {
+.note-editor-btn.done:hover {
   background: #43a047;
-}
-
-.note-editor-btn.cancel {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
-}
-
-.note-editor-btn.cancel:hover {
-  background: rgba(255, 255, 255, 0.25);
 }
 
 .ride-status {
@@ -3493,8 +3484,7 @@ function renderApp() {
             <div class="note-editor" style="display: none;" data-entity-id="${item.id}">
               <textarea placeholder="Add a note...">${escapeHtml(note)}</textarea>
               <div class="note-editor-buttons">
-                <button class="note-editor-btn cancel">Cancel</button>
-                <button class="note-editor-btn save">Save</button>
+                <button class="note-editor-btn done">Done</button>
               </div>
             </div>
           </div>
@@ -3545,24 +3535,59 @@ function renderApp() {
       const card = editor.closest('.ride-card');
       const noteBtn = card.querySelector('.note-btn');
       const textarea = editor.querySelector('textarea');
-      const saveBtn = editor.querySelector('.note-editor-btn.save');
-      const cancelBtn = editor.querySelector('.note-editor-btn.cancel');
+      const doneBtn = editor.querySelector('.note-editor-btn.done');
+      let debounceTimer;
 
-      saveBtn.addEventListener('click', (e) => {
+      // Auto-save on input with debounce
+      textarea.addEventListener('input', (e) => {
         e.stopPropagation();
-        const text = textarea.value;
-        saveNote(entityId, text);
-        showToast(text.trim() ? 'Note saved' : 'Note removed');
-        renderItems();
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          const text = textarea.value;
+          saveNote(entityId, text);
+          // Update note button appearance
+          if (text.trim()) {
+            noteBtn.classList.add('has-note');
+          } else {
+            noteBtn.classList.remove('has-note');
+          }
+          // Update inline note display
+          let noteDisplay = card.querySelector('.item-note');
+          if (text.trim()) {
+            if (!noteDisplay) {
+              noteDisplay = document.createElement('div');
+              noteDisplay.className = 'item-note';
+              editor.parentNode.insertBefore(noteDisplay, editor);
+            }
+            noteDisplay.textContent = text;
+            noteDisplay.style.display = 'none'; // Keep hidden while editing
+          } else if (noteDisplay) {
+            noteDisplay.remove();
+          }
+        }, 300);
       });
 
-      cancelBtn.addEventListener('click', (e) => {
+      doneBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const existingNote = getNote(entityId);
-        textarea.value = existingNote;
+        clearTimeout(debounceTimer);
+        const text = textarea.value;
+        saveNote(entityId, text);
         editor.style.display = 'none';
-        const noteDisplay = card.querySelector('.item-note');
-        if (noteDisplay) noteDisplay.style.display = 'block';
+        // Update note display
+        let noteDisplay = card.querySelector('.item-note');
+        if (text.trim()) {
+          noteBtn.classList.add('has-note');
+          if (!noteDisplay) {
+            noteDisplay = document.createElement('div');
+            noteDisplay.className = 'item-note';
+            editor.parentNode.insertBefore(noteDisplay, editor);
+          }
+          noteDisplay.textContent = text;
+          noteDisplay.style.display = 'block';
+        } else {
+          noteBtn.classList.remove('has-note');
+          if (noteDisplay) noteDisplay.remove();
+        }
       });
     });
   }
