@@ -746,6 +746,21 @@ body {
   background: rgba(255, 255, 255, 0.25);
 }
 
+.qr-modal {
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
+  display: flex;
+  flex-direction: column;
+}
+
+.qr-modal .qr-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .qr-container {
   display: flex;
   justify-content: center;
@@ -756,9 +771,16 @@ body {
   background: #fff;
   padding: 12px;
   border-radius: 8px;
-  max-width: calc(100vw - 80px);
+  max-width: min(100%, calc(100vw - 80px));
   max-height: calc(100vh - 280px);
+  max-height: calc(100dvh - 280px);
   object-fit: contain;
+}
+
+.qr-modal .qr-container img {
+  max-width: min(100%, calc(100vw - 100px));
+  max-height: calc(100vh - 220px);
+  max-height: calc(100dvh - 220px);
 }
 
 .qr-scanner-container {
@@ -2900,7 +2922,7 @@ async function showQRCodeModal(type) {
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
   modal.innerHTML = `
-    <div class="modal">
+    <div class="modal qr-modal">
       <div class="modal-title">Share ${typeLabel}</div>
       <div class="modal-text">Have the other person scan this QR code with their Disneyland app.</div>
       <div class="qr-container">
